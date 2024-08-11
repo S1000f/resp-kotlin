@@ -1,6 +1,5 @@
 package respkotlin
 
-import java.io.BufferedInputStream
 import java.net.Socket
 import java.io.OutputStream
 import java.io.InputStream
@@ -30,28 +29,100 @@ fun main() {
 
         val smembers = "*2\r\n$8\r\nSMEMBERS\r\n$5\r\nmykey\r\n"
         sendCommand(output, smembers)
-
-        BufferedInputStream(input).use { bufferedInputStream ->
-            val buffer = ByteArray(1024)
-            val bytesRead = bufferedInputStream.read(buffer)
-
-        }
-
-
         println("GET Response: ${readResponse(input)}")
     }
 
     val aggregate = "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"
-    val aggreData = aggregate.toByteArray()
-    length(aggreData)
-    length(aggreData)
+    val data = aggregate.toByteArray()
+
 }
 
-sealed interface Aggregate {
-    val length: Int
+fun interface Deserializer<out T> {
+    fun deserialize(data: ByteArray): T
 }
 
-fun length(data: ByteArray): Int {
+fun interface Serializer<T> {
+    fun serialize(data: T): ByteArray
+}
+
+object SimpleString : Deserializer<String>, Serializer<String> {
+    override fun deserialize(data: ByteArray): String {
+        TODO("Not yet implemented")
+    }
+
+    override fun serialize(data: String): ByteArray {
+        TODO("Not yet implemented")
+    }
+}
+
+val simpleStringDeserializer = Deserializer { data ->
+    String(data, 1, lengthOfData(data))
+}
+
+val integerDeserializer = Deserializer { data ->
+    val (isPositive, index) = if (data[1].toInt() == '-'.code || data[1].toInt() == '+'.code) {
+        (data[1].toInt() == '+'.code) to 2
+    } else {
+        true to 1
+    }
+
+    val long = String(data, index, lengthOfData(data, index)).toLong()
+
+    if (isPositive) long else -long
+}
+
+val arrayDeserializer = Deserializer { data ->
+    val numOfElements = numberOfElements(data)
+    val list = mutableListOf<Any>()
+
+    var index = 1
+    while (data[index].toInt() != '\n'.code) {
+        index++
+    }
+
+    index++
+    var count = 0
+
+    while (count < numOfElements) {
+        val element = data.sliceArray(index..data.size)
+
+        val dataType = matchDataType(element)
+        val value = dataType.deserialize(element)
+        list.add(value)
+
+        val lengthOfElement = lengthOfData(data, index)
+
+        index += lengthOfElement + 2
+        count++
+    }
+
+    list.toList()
+}
+
+private val dataTypeMap = mutableMapOf(
+    '+'.code to simpleStringDeserializer,
+    '$'.code to integerDeserializer,
+    '*'.code to arrayDeserializer
+)
+
+fun matchDataType(data: ByteArray): Deserializer<Any> {
+    val firstByte = data[0].toInt()
+    return dataTypeMap[firstByte] ?: throw IllegalArgumentException("Unknown data type: $firstByte")
+}
+
+fun lengthOfData(data: ByteArray, offset: Int = 1): Int {
+    var len = 0
+    var i = offset
+
+    while (data[i].toInt() != '\r'.code) {
+        len++
+        i++
+    }
+
+    return len
+}
+
+fun numberOfElements(data: ByteArray): Int {
     var len = 0
     var i = 1
 
@@ -59,8 +130,6 @@ fun length(data: ByteArray): Int {
         len = len * 10 + (data[i] - '0'.code)
         i++
     }
-
-    println("Length: $len")
 
     return len
 }
