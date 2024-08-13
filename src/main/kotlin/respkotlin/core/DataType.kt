@@ -17,27 +17,27 @@ sealed interface DataCategory {
 
 sealed interface DataType<T> : Deserializer<T>, Serializer<T>, DataCategory
 
-sealed interface SimpleDataType<T> : DataType<T> {
+sealed interface SimpleType<T> : DataType<T> {
     override val length: (ByteArray) -> Int
         get() = { it.lengthUntilTerminator() }
 }
 
-sealed interface AggregateDataType<T> : DataType<T> {
+sealed interface AggregateType<T> : DataType<T> {
     override val length: (ByteArray) -> Int
         get() = { it.length() }
 }
 
-object SimpleStringType : SimpleDataType<String> {
+sealed interface ContainerType<T> : AggregateType<T>
 
+object SimpleStringType : SimpleType<String> {
     override fun serialize(data: String): ByteArray {
         return "+$data$TERMINATOR".toByteArray()
     }
 
-    override fun deserialize(data: ByteArray) = String(data, 1, data.lengthUntilTerminator() - 1)
+    override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1)
 }
 
-object IntegerType : SimpleDataType<Long> {
-
+object IntegerType : SimpleType<Long> {
     override fun serialize(data: Long): ByteArray {
         TODO("Not yet implemented")
     }
@@ -55,53 +55,65 @@ object IntegerType : SimpleDataType<Long> {
     }
 }
 
-object BulkStringType : AggregateDataType<String> {
-
+object BulkStringType : AggregateType<String> {
     override fun serialize(data: String): ByteArray {
         TODO("Not yet implemented")
     }
 
     override fun deserialize(data: ByteArray): String {
-        val length = data.length()
+        val length = length(data)
         return if (length == 0) "" else String(data, data.lengthUntilTerminator() + TERMINATOR.length, length)
     }
 }
 
-object ArrayType : AggregateDataType<List<Any>> {
-
+object ArrayType : ContainerType<List<Any>> {
     override fun serialize(data: List<Any>): ByteArray {
         TODO("Not yet implemented")
     }
 
     override fun deserialize(data: ByteArray): List<Any> {
-        val numOfElements = data.length()
-        val list = mutableListOf<Any>()
-        var round = data.sliceArray(data.lengthUntilTerminator() + TERMINATOR.length..<data.size)
-        var roundType = round.toDataType()
+        return splitElements(data).first
+    }
+}
 
-        var count = 0
-        var offset: Int
+private fun splitElements(data: ByteArray): Pair<List<Any>, Int> {
+    val numOfElements = data.length()
+    val list = mutableListOf<Any>()
+    val prefix = data.lengthUntilTerminator() + TERMINATOR.length
 
-        while (count < numOfElements) {
-            count++
-            val value = roundType.deserialize(round)
-            list.add(value)
+    var round = data.sliceArray(prefix..<data.size)
+    var count = 0
+    var totalLength = prefix
 
-            if (count == numOfElements) {
-                break
+    while (count < numOfElements) {
+        count++
+
+        val (element, len) = when (val dataType = round.toDataType()) {
+            is SimpleType -> {
+                val len = dataType.length(round) + TERMINATOR.length
+                dataType.deserialize(round.sliceArray(0..<len)) to len
             }
 
-            offset = when (roundType) {
-                is SimpleDataType -> roundType.length(round) + TERMINATOR.length
-                is AggregateDataType -> round.lengthUntilTerminator() + roundType.length(round) + TERMINATOR.length * 2
+            is AggregateType -> when (dataType) {
+                is ContainerType -> splitElements(round)
+                else -> {
+                    val len = round.lengthUntilTerminator() + dataType.length(round) + TERMINATOR.length * 2
+                    dataType.deserialize(round.sliceArray(0..<len)) to len
+                }
             }
-
-            round = round.sliceArray(offset..<round.size)
-            roundType = round.toDataType()
         }
 
-        return list.toList()
+        list.add(element)
+        totalLength += len
+
+        if (count == numOfElements) {
+            break
+        }
+
+        round = round.sliceArray(len..<round.size)
     }
+
+    return list.toList() to totalLength
 }
 
 private val dataTypeMap = mutableMapOf(

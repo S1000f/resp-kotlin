@@ -135,4 +135,53 @@ class DataTypeTest {
         // then
         assert(result1 == listOf(42L, "bar", 1000L))
     }
+
+    @Test
+    fun `test nested array deserialize`() {
+        // given
+        val data = "*2\r\n*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n$3\r\nbaz\r\n".toByteArray()
+        // when
+        val result = ArrayType.deserialize(data)
+        // then
+        assert(result == listOf(listOf("foo", "bar"), "baz"))
+
+        // given
+        val data1 = "*2\r\n$3\r\nfoo\r\n*2\r\n$3\r\nbar\r\n$2\r\nbz\r\n".toByteArray()
+        // when
+        val result1 = ArrayType.deserialize(data1)
+        // then
+        assert(result1 == listOf("foo", listOf("bar", "bz")))
+
+        // given
+        val data2 = "*2\r\n*2\r\n$3\r\nfoo\r\n$2\r\nba\r\n*2\r\n$1\r\nz\r\n$3\r\nqux\r\n".toByteArray()
+        // when
+        val result2 = ArrayType.deserialize(data2)
+        // then
+        assert(result2 == listOf(listOf("foo", "ba"), listOf("z", "qux")))
+    }
+
+    @Test
+    fun `test nested array deserialize with mixed data types`() {
+        // given
+        val data = "*2\r\n*2\r\n$3\r\nfoo\r\n:1000\r\n$3\r\nbar\r\n".toByteArray()
+        // when
+        val result = ArrayType.deserialize(data)
+        // then
+        assert(result == listOf(listOf("foo", 1000L), "bar"))
+
+        // given
+        val data1 = "*2\r\n:42\r\n*2\r\n$3\r\nbar\r\n:1000\r\n".toByteArray()
+        // when
+        val result1 = ArrayType.deserialize(data1)
+        // then
+        assert(result1 == listOf(42L, listOf("bar", 1000L)))
+
+        // given
+        val data2 = "*2\r\n*2\r\n$3\r\nfoo\r\n:1000\r\n*3\r\n$0\r\n\r\n:42\r\n+OK\r\n".toByteArray()
+        // when
+        val result2 = ArrayType.deserialize(data2)
+        // then
+        assert(result2 == listOf(listOf("foo", 1000L), listOf("", 42L, "OK")))
+    }
+
 }
