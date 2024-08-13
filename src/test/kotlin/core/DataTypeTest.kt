@@ -26,6 +26,23 @@ class DataTypeTest {
     }
 
     @Test
+    fun `test simple string serializer`() {
+        // given
+        val data = "OK"
+        // when
+        val result = SimpleStringType.serialize(data)
+        // then
+        assert(result.contentEquals("+OK\r\n".toByteArray()))
+
+        // given
+        val data1 = "+"
+        // when
+        val result1 = SimpleStringType.serialize(data1)
+        // then
+        assert(result1.contentEquals("++\r\n".toByteArray()))
+    }
+
+    @Test
     fun `test integer deserializer`() {
         // given
         val data = ":1000\r\n".toByteArray()
@@ -65,6 +82,37 @@ class DataTypeTest {
     }
 
     @Test
+    fun `test integer serializer`() {
+        // given
+        val data = 1000L
+        // when
+        val result = IntegerType.serialize(data)
+        // then
+        assert(result.contentEquals(":1000\r\n".toByteArray()))
+
+        // given
+        val data1 = -1000L
+        // when
+        val result1 = IntegerType.serialize(data1)
+        // then
+        assert(result1.contentEquals(":-1000\r\n".toByteArray()))
+
+        // given
+        val data2 = 0L
+        // when
+        val result2 = IntegerType.serialize(data2)
+        // then
+        assert(result2.contentEquals(":0\r\n".toByteArray()))
+
+        // given
+        val data3 = -0L
+        // when
+        val result3 = IntegerType.serialize(data3)
+        // then
+        assert(result3.contentEquals(":0\r\n".toByteArray()))
+    }
+
+    @Test
     fun `test bulk string deserializer`() {
         // given
         val data = "$3\r\nfoo\r\n".toByteArray()
@@ -79,6 +127,37 @@ class DataTypeTest {
         val result1 = BulkStringType.deserialize(data1)
         // then
         assert(result1 == "")
+
+        // given
+        val data2 = "$12\r\nHello\nworld!\r\n".toByteArray()
+        // when
+        val result2 = BulkStringType.deserialize(data2)
+        // then
+        assert(result2 == "Hello\nworld!")
+    }
+
+    @Test
+    fun `test bulk string serializer`() {
+        // given
+        val data = "foo"
+        // when
+        val result = BulkStringType.serialize(data)
+        // then
+        assert(result.contentEquals("$3\r\nfoo\r\n".toByteArray()))
+
+        // given
+        val data1 = ""
+        // when
+        val result1 = BulkStringType.serialize(data1)
+        // then
+        assert(result1.contentEquals("$0\r\n\r\n".toByteArray()))
+
+        // given
+        val data2 = "Hello\nworld!"
+        // when
+        val result2 = BulkStringType.serialize(data2)
+        // then
+        assert(result2.contentEquals("$12\r\nHello\nworld!\r\n".toByteArray()))
     }
 
     @Test
@@ -182,6 +261,57 @@ class DataTypeTest {
         val result2 = ArrayType.deserialize(data2)
         // then
         assert(result2 == listOf(listOf("foo", 1000L), listOf("", 42L, "OK")))
+
+        // given
+        val data3 = "*2\r\n*2\r\n+foo\r\n*2\r\n+bar\r\n:42\r\n$11\r\nhello\nworld\r\n".toByteArray()
+        // when
+        val result3 = ArrayType.deserialize(data3)
+        // then
+        assert(result3 == listOf(listOf("foo", listOf("bar", 42L)), "hello\nworld"))
     }
 
+    @Test
+    fun `test array serialize`() {
+        // given
+        val list = listOf("foo", "bar")
+        // when
+        val matched2 = ArrayType.serialize(list)
+        // then
+        assert(matched2.contentEquals("*2\r\n+foo\r\n+bar\r\n".toByteArray()))
+
+        // given
+        val list1 = listOf("fo\no", 1000L)
+        // when
+        val matched3 = ArrayType.serialize(list1)
+        // then
+        assert(matched3.contentEquals("*2\r\n$4\r\nfo\no\r\n:1000\r\n".toByteArray()))
+
+        // given
+        val list2 = listOf("foo", listOf("bar", 1000L))
+        // when
+        val matched4 = ArrayType.serialize(list2)
+        // then
+        assert(matched4.contentEquals("*2\r\n+foo\r\n*2\r\n+bar\r\n:1000\r\n".toByteArray()))
+
+        // given
+        val list3 = listOf("hello\nworld", listOf("bar", 1000L), "baz")
+        // when
+        val matched5 = ArrayType.serialize(list3)
+        // then
+        assert(matched5.contentEquals("*3\r\n$11\r\nhello\nworld\r\n*2\r\n+bar\r\n:1000\r\n+baz\r\n".toByteArray()))
+
+        // given
+        val list4 = listOf(listOf("foo", 42L), listOf("bar", 1000L))
+        // when
+        val matched6 = ArrayType.serialize(list4)
+        // then
+        assert(matched6.contentEquals("*2\r\n*2\r\n+foo\r\n:42\r\n*2\r\n+bar\r\n:1000\r\n".toByteArray()))
+
+        // given
+        val list5 = listOf(listOf("foo", listOf("bar", 42L)), "hello\nworld")
+        // when
+        val matched7 = ArrayType.serialize(list5)
+        // then
+        assert(matched7.contentEquals("*2\r\n*2\r\n+foo\r\n*2\r\n+bar\r\n:42\r\n$11\r\nhello\nworld\r\n".toByteArray()))
+    }
 }

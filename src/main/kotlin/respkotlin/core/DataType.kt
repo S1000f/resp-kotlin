@@ -30,17 +30,12 @@ sealed interface AggregateType<T> : DataType<T> {
 sealed interface ContainerType<T> : AggregateType<T>
 
 object SimpleStringType : SimpleType<String> {
-    override fun serialize(data: String): ByteArray {
-        return "+$data$TERMINATOR".toByteArray()
-    }
-
+    override fun serialize(data: String) = "+$data$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1)
 }
 
 object IntegerType : SimpleType<Long> {
-    override fun serialize(data: Long): ByteArray {
-        TODO("Not yet implemented")
-    }
+    override fun serialize(data: Long) = ":${data}$TERMINATOR".toByteArray()
 
     override fun deserialize(data: ByteArray): Long {
         val (isPositive, index) = if (data[1].toInt() == '-'.code || data[1].toInt() == '+'.code) {
@@ -56,27 +51,37 @@ object IntegerType : SimpleType<Long> {
 }
 
 object BulkStringType : AggregateType<String> {
-    override fun serialize(data: String): ByteArray {
-        TODO("Not yet implemented")
-    }
+    override fun serialize(data: String) = "$${data.length}$TERMINATOR$data$TERMINATOR".toByteArray()
 
-    override fun deserialize(data: ByteArray): String {
-        val length = length(data)
-        return if (length == 0) "" else String(data, data.lengthUntilTerminator() + TERMINATOR.length, length)
-    }
+    override fun deserialize(data: ByteArray) =
+        String(data, data.lengthUntilTerminator() + TERMINATOR.length, length(data))
 }
 
 object ArrayType : ContainerType<List<Any>> {
-    override fun serialize(data: List<Any>): ByteArray {
-        TODO("Not yet implemented")
-    }
-
-    override fun deserialize(data: ByteArray): List<Any> {
-        return splitElements(data).first
-    }
+    override fun serialize(data: List<Any>) = serializeContainer(data)
+    override fun deserialize(data: ByteArray) = deserializeArray(data).first
 }
 
-private fun splitElements(data: ByteArray): Pair<List<Any>, Int> {
+private fun serializeContainer(data: Any): ByteArray = when (data) {
+    is String -> when (data.contains('\r') || data.contains('\n')) {
+        true -> BulkStringType.serialize(data)
+        false -> SimpleStringType.serialize(data)
+    }
+
+    is Int -> IntegerType.serialize(data.toLong())
+    is Long -> IntegerType.serialize(data)
+    is List<*> -> when (data.isEmpty()) {
+        true -> "*0$TERMINATOR".toByteArray()
+        false -> {
+            val collect = data.map { serializeContainer(it!!) }
+            collect.fold("*${collect.size}$TERMINATOR".toByteArray(), ByteArray::plus)
+        }
+    }
+
+    else -> throw IllegalArgumentException("Unknown data type: $data")
+}
+
+private fun deserializeArray(data: ByteArray): Pair<List<Any>, Int> {
     val numOfElements = data.length()
     val list = mutableListOf<Any>()
     val prefix = data.lengthUntilTerminator() + TERMINATOR.length
@@ -95,7 +100,7 @@ private fun splitElements(data: ByteArray): Pair<List<Any>, Int> {
             }
 
             is AggregateType -> when (dataType) {
-                is ContainerType -> splitElements(round)
+                is ContainerType -> deserializeArray(round)
                 else -> {
                     val len = round.lengthUntilTerminator() + dataType.length(round) + TERMINATOR.length * 2
                     dataType.deserialize(round.sliceArray(0..<len)) to len
