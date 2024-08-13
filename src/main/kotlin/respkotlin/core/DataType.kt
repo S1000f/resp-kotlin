@@ -152,7 +152,8 @@ private val dataTypeMap = mutableMapOf(
     IntegerType.firstByte.code to IntegerType,
     BulkStringType.firstByte.code to BulkStringType,
     ArrayType.firstByte.code to ArrayType,
-    NullType.firstByte.code to NullType
+    NullType.firstByte.code to NullType,
+    BooleanType.firstByte.code to BooleanType
 )
 
 private fun ByteArray.toDataType(): DataType<out Any> {
