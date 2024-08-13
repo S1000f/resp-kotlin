@@ -43,6 +43,40 @@ class DataTypeTest {
     }
 
     @Test
+    fun `test simple error deserializer`() {
+        // given
+        val data = "-ERR unknown command 'foobar'\r\n".toByteArray()
+        // when
+        val result = SimpleErrorType.deserialize(data)
+        // then
+        assert(result == "ERR unknown command 'foobar'")
+
+        // given
+        val data1 = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n".toByteArray()
+        // when
+        val result1 = SimpleErrorType.deserialize(data1)
+        // then
+        assert(result1 == "WRONGTYPE Operation against a key holding the wrong kind of value")
+    }
+
+    @Test
+    fun `test simple error serializer`() {
+        // given
+        val data = "ERR unknown command 'foobar'"
+        // when
+        val result = SimpleErrorType.serialize(data)
+        // then
+        assert(result.contentEquals("-ERR unknown command 'foobar'\r\n".toByteArray()))
+
+        // given
+        val data1 = "WRONGTYPE Operation against a key holding the wrong kind of value"
+        // when
+        val result1 = SimpleErrorType.serialize(data1)
+        // then
+        assert(result1.contentEquals("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n".toByteArray()))
+    }
+
+    @Test
     fun `test integer deserializer`() {
         // given
         val data = ":1000\r\n".toByteArray()
@@ -313,5 +347,59 @@ class DataTypeTest {
         val matched7 = ArrayType.serialize(list5)
         // then
         assert(matched7.contentEquals("*2\r\n*2\r\n+foo\r\n*2\r\n+bar\r\n:42\r\n$11\r\nhello\nworld\r\n".toByteArray()))
+    }
+
+    @Test
+    fun `test null deserializer`() {
+        // given
+        val data = "_\r\n".toByteArray()
+        // when
+        val result = NullType.deserialize(data)
+        // then
+        assert(result == Unit)
+    }
+
+    @Test
+    fun `test null serializer`() {
+        // given
+        val data = Unit
+        // when
+        val result = NullType.serialize(data)
+        // then
+        assert(result.contentEquals("_\r\n".toByteArray()))
+    }
+
+    @Test
+    fun `test boolean deserializer`() {
+        // given
+        val data = "#t\r\n".toByteArray()
+        // when
+        val result = BooleanType.deserialize(data)
+        // then
+        assert(result)
+
+        // given
+        val data1 = "#f\r\n".toByteArray()
+        // when
+        val result1 = BooleanType.deserialize(data1)
+        // then
+        assert(!result1)
+    }
+
+    @Test
+    fun `test boolean serializer`() {
+        // given
+        val data = true
+        // when
+        val result = BooleanType.serialize(data)
+        // then
+        assert(result.contentEquals("#t\r\n".toByteArray()))
+
+        // given
+        val data1 = false
+        // when
+        val result1 = BooleanType.serialize(data1)
+        // then
+        assert(result1.contentEquals("#f\r\n".toByteArray()))
     }
 }

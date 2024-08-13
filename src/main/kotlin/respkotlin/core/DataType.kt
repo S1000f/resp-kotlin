@@ -12,10 +12,11 @@ fun interface Serializer<in T> {
 }
 
 sealed interface DataCategory {
+    val firstByte: Char
     val length: (ByteArray) -> Int
 }
 
-sealed interface DataType<T> : Deserializer<T>, Serializer<T>, DataCategory
+sealed interface DataType<T> : Serializer<T>, Deserializer<T>, DataCategory
 
 sealed interface SimpleType<T> : DataType<T> {
     override val length: (ByteArray) -> Int
@@ -30,12 +31,19 @@ sealed interface AggregateType<T> : DataType<T> {
 sealed interface ContainerType<T> : AggregateType<T>
 
 object SimpleStringType : SimpleType<String> {
-    override fun serialize(data: String) = "+$data$TERMINATOR".toByteArray()
+    override fun serialize(data: String) = "$firstByte$data$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1)
+    override val firstByte get() = '+'
+}
+
+object SimpleErrorType : SimpleType<String> {
+    override fun serialize(data: String) = "$firstByte$data$TERMINATOR".toByteArray()
+    override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1)
+    override val firstByte get() = '-'
 }
 
 object IntegerType : SimpleType<Long> {
-    override fun serialize(data: Long) = ":${data}$TERMINATOR".toByteArray()
+    override fun serialize(data: Long) = "$firstByte${data}$TERMINATOR".toByteArray()
 
     override fun deserialize(data: ByteArray): Long {
         val (isPositive, index) = if (data[1].toInt() == '-'.code || data[1].toInt() == '+'.code) {
@@ -48,18 +56,35 @@ object IntegerType : SimpleType<Long> {
 
         return if (isPositive) long else -long
     }
+
+    override val firstByte get() = ':'
 }
 
 object BulkStringType : AggregateType<String> {
-    override fun serialize(data: String) = "$${data.length}$TERMINATOR$data$TERMINATOR".toByteArray()
+    override fun serialize(data: String) = "$firstByte${data.length}$TERMINATOR$data$TERMINATOR".toByteArray()
 
     override fun deserialize(data: ByteArray) =
         String(data, data.lengthUntilTerminator() + TERMINATOR.length, length(data))
+
+    override val firstByte get() = '$'
 }
 
 object ArrayType : ContainerType<List<Any>> {
     override fun serialize(data: List<Any>) = serializeContainer(data)
     override fun deserialize(data: ByteArray) = deserializeArray(data).first
+    override val firstByte get() = '*'
+}
+
+object NullType : SimpleType<Unit> {
+    override fun serialize(data: Unit) = "$firstByte$TERMINATOR".toByteArray()
+    override fun deserialize(data: ByteArray) = Unit
+    override val firstByte get() = '_'
+}
+
+object BooleanType : SimpleType<Boolean> {
+    override fun serialize(data: Boolean) = "$firstByte${if (data) "t" else "f"}$TERMINATOR".toByteArray()
+    override fun deserialize(data: ByteArray) = data[1].toInt() == 't'.code
+    override val firstByte get() = '#'
 }
 
 private fun serializeContainer(data: Any): ByteArray = when (data) {
@@ -71,10 +96,10 @@ private fun serializeContainer(data: Any): ByteArray = when (data) {
     is Int -> IntegerType.serialize(data.toLong())
     is Long -> IntegerType.serialize(data)
     is List<*> -> when (data.isEmpty()) {
-        true -> "*0$TERMINATOR".toByteArray()
+        true -> "${ArrayType.firstByte}0$TERMINATOR".toByteArray()
         false -> {
             val collect = data.map { serializeContainer(it!!) }
-            collect.fold("*${collect.size}$TERMINATOR".toByteArray(), ByteArray::plus)
+            collect.fold("${ArrayType.firstByte}${collect.size}$TERMINATOR".toByteArray(), ByteArray::plus)
         }
     }
 
@@ -122,10 +147,12 @@ private fun deserializeArray(data: ByteArray): Pair<List<Any>, Int> {
 }
 
 private val dataTypeMap = mutableMapOf(
-    '+'.code to SimpleStringType,
-    ':'.code to IntegerType,
-    '$'.code to BulkStringType,
-    '*'.code to ArrayType
+    SimpleStringType.firstByte.code to SimpleStringType,
+    SimpleErrorType.firstByte.code to SimpleErrorType,
+    IntegerType.firstByte.code to IntegerType,
+    BulkStringType.firstByte.code to BulkStringType,
+    ArrayType.firstByte.code to ArrayType,
+    NullType.firstByte.code to NullType
 )
 
 private fun ByteArray.toDataType(): DataType<out Any> {
