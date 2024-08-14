@@ -6,7 +6,7 @@ import respkotlin.core.SimpleError
 import respkotlin.core.SimpleErrorType
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class SimpleErrorTypeTest {
+class SimpleErrorTest {
 
     @Test
     fun `test simple error deserializer`() {

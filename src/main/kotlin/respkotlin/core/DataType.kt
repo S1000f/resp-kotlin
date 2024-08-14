@@ -5,12 +5,12 @@ import java.math.BigInteger
 const val TERMINATOR = "\r\n"
 const val TERMINATOR_FIRST_BYTE = '\r'.code.toByte()
 
-fun interface Deserializer<out T> {
-    fun deserialize(data: ByteArray): T
+fun interface Serializer<in S> {
+    fun serialize(data: S): ByteArray
 }
 
-fun interface Serializer<in T> {
-    fun serialize(data: T): ByteArray
+fun interface Deserializer<out D> {
+    fun deserialize(data: ByteArray): D
 }
 
 sealed interface DataCategory {
@@ -18,21 +18,23 @@ sealed interface DataCategory {
     val length: (ByteArray) -> Int
 }
 
-sealed interface DataType<T> : Serializer<T>, Deserializer<T>, DataCategory
+sealed interface DataType<S, D> : Serializer<S>, Deserializer<D>, DataCategory
 
-sealed interface SimpleType<T> : DataType<T> {
+sealed interface SimpleType<S, D> : DataType<S, D> {
     override val length: (ByteArray) -> Int
         get() = { it.lengthUntilTerminator() }
 }
 
-sealed interface AggregateType<T> : DataType<T> {
+sealed interface AggregateType<S, D> : DataType<S, D> {
     override val length: (ByteArray) -> Int
         get() = { it.length() }
 }
 
-sealed interface ContainerType<T> : AggregateType<T>
+sealed interface ContainerType<S, D> : AggregateType<S, D>
 
-sealed interface ErrorType {
+sealed interface ErrorType : Deserializer<Error>
+
+sealed interface Error {
     val prefix: String
     val message: String
 }
@@ -40,20 +42,26 @@ sealed interface ErrorType {
 data class SimpleError(
     override val prefix: String,
     override val message: String
-) : ErrorType
+) : Error {
+    init {
+        if (message.contains('\r') || message.contains('\n')) {
+            throw IllegalArgumentException("Error message cannot contain '\\r' or '\\n'")
+        }
+    }
+}
 
 data class BulkError(
     override val prefix: String,
     override val message: String
-) : ErrorType
+) : Error
 
-object SimpleStringType : SimpleType<String> {
+object SimpleStringType : SimpleType<String, String> {
     override fun serialize(data: String) = "$firstByte$data$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1)
     override val firstByte get() = '+'
 }
 
-object SimpleErrorType : SimpleType<SimpleError> {
+object SimpleErrorType : SimpleType<SimpleError, Error>, ErrorType {
     override fun serialize(data: SimpleError) = "$firstByte${data.prefix} ${data.message}$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = SimpleStringType.deserialize(data).let {
         val split = it.split(" ", limit = 2)
@@ -63,13 +71,13 @@ object SimpleErrorType : SimpleType<SimpleError> {
     override val firstByte get() = '-'
 }
 
-object IntegerType : SimpleType<Long> {
+object IntegerType : SimpleType<Long, Long> {
     override fun serialize(data: Long) = "$firstByte${data}$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1).toLong()
     override val firstByte get() = ':'
 }
 
-object BulkStringType : AggregateType<String> {
+object BulkStringType : AggregateType<String, String> {
     override fun serialize(data: String) = "$firstByte${data.length}$TERMINATOR$data$TERMINATOR".toByteArray()
 
     override fun deserialize(data: ByteArray) =
@@ -78,25 +86,25 @@ object BulkStringType : AggregateType<String> {
     override val firstByte get() = '$'
 }
 
-object ArrayType : ContainerType<List<Any>> {
+object ArrayType : ContainerType<List<Any>, List<Any>> {
     override fun serialize(data: List<Any>) = serializeContainer(data)
     override fun deserialize(data: ByteArray) = deserializeArray(data).first
     override val firstByte get() = '*'
 }
 
-object NullType : SimpleType<Unit> {
+object NullType : SimpleType<Unit, Unit> {
     override fun serialize(data: Unit) = "$firstByte$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = Unit
     override val firstByte get() = '_'
 }
 
-object BooleanType : SimpleType<Boolean> {
+object BooleanType : SimpleType<Boolean, Boolean> {
     override fun serialize(data: Boolean) = "$firstByte${if (data) "t" else "f"}$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = data[1].toInt() == 't'.code
     override val firstByte get() = '#'
 }
 
-object DoubleType : SimpleType<Double> {
+object DoubleType : SimpleType<Double, Double> {
     override fun serialize(data: Double) = when {
         data.isNaN() -> "nan"
         data == Double.POSITIVE_INFINITY -> "inf"
@@ -114,13 +122,13 @@ object DoubleType : SimpleType<Double> {
     override val firstByte get() = ','
 }
 
-object BigNumberType : SimpleType<BigInteger> {
+object BigNumberType : SimpleType<BigInteger, BigInteger> {
     override fun serialize(data: BigInteger) = "$firstByte$data$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1).toBigInteger()
     override val firstByte get() = '('
 }
 
-object BulkErrorType : AggregateType<BulkError> {
+object BulkErrorType : AggregateType<BulkError, Error>, ErrorType {
     override fun serialize(data: BulkError) =
         "${data.prefix} ${data.message}".let { "$firstByte${it.length}$TERMINATOR$it$TERMINATOR".toByteArray() }
 
@@ -210,7 +218,7 @@ private val dataTypeMap = mutableMapOf(
     BulkErrorType.firstByte.code to BulkErrorType
 )
 
-internal fun ByteArray.toDataType(): DataType<out Any> {
+internal fun ByteArray.toDataType(): DataType<out Any, out Any> {
     val firstByte = this[0].toInt()
     val dataType = dataTypeMap[firstByte] ?: throw IllegalArgumentException("Unknown data type: $firstByte")
 
