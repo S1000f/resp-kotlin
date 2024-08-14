@@ -1,7 +1,9 @@
 package respkotlin.core
 
+import java.math.BigInteger
+
 const val TERMINATOR = "\r\n"
-const val TERMINATOR_FIRST_BYTE = '\r'.code
+const val TERMINATOR_FIRST_BYTE = '\r'.code.toByte()
 
 fun interface Deserializer<out T> {
     fun deserialize(data: ByteArray): T
@@ -44,19 +46,7 @@ object SimpleErrorType : SimpleType<String> {
 
 object IntegerType : SimpleType<Long> {
     override fun serialize(data: Long) = "$firstByte${data}$TERMINATOR".toByteArray()
-
-    override fun deserialize(data: ByteArray): Long {
-        val (isPositive, index) = if (data[1].toInt() == '-'.code || data[1].toInt() == '+'.code) {
-            (data[1].toInt() == '+'.code) to 2
-        } else {
-            true to 1
-        }
-
-        val long = String(data, index, data.lengthUntilTerminator(index) - index).toLong()
-
-        return if (isPositive) long else -long
-    }
-
+    override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1).toLong()
     override val firstByte get() = ':'
 }
 
@@ -87,6 +77,30 @@ object BooleanType : SimpleType<Boolean> {
     override val firstByte get() = '#'
 }
 
+object DoubleType : SimpleType<Double> {
+    override fun serialize(data: Double) = when {
+        data.isNaN() -> "nan"
+        data == Double.POSITIVE_INFINITY -> "inf"
+        data == Double.NEGATIVE_INFINITY -> "-inf"
+        else -> data.toString()
+    }.let { "$firstByte$it$TERMINATOR".toByteArray() }
+
+    override fun deserialize(data: ByteArray) = when (data.elementAt(2)) {
+        'n'.code.toByte() -> Double.POSITIVE_INFINITY
+        'i'.code.toByte() -> Double.NEGATIVE_INFINITY
+        'a'.code.toByte() -> Double.NaN
+        else -> String(data, 1, length(data) - 1).toDouble()
+    }
+
+    override val firstByte get() = ','
+}
+
+object BigNumberType : SimpleType<BigInteger> {
+    override fun serialize(data: BigInteger) = "$firstByte$data$TERMINATOR".toByteArray()
+    override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1).toBigInteger()
+    override val firstByte get() = '('
+}
+
 private fun serializeContainer(data: Any): ByteArray = when (data) {
     is String -> when (data.contains('\r') || data.contains('\n')) {
         true -> BulkStringType.serialize(data)
@@ -103,6 +117,8 @@ private fun serializeContainer(data: Any): ByteArray = when (data) {
         }
     }
 
+    is Unit -> NullType.serialize(Unit)
+    is Boolean -> BooleanType.serialize(data)
     else -> throw IllegalArgumentException("Unknown data type: $data")
 }
 
@@ -153,31 +169,25 @@ private val dataTypeMap = mutableMapOf(
     BulkStringType.firstByte.code to BulkStringType,
     ArrayType.firstByte.code to ArrayType,
     NullType.firstByte.code to NullType,
-    BooleanType.firstByte.code to BooleanType
+    BooleanType.firstByte.code to BooleanType,
+    DoubleType.firstByte.code to DoubleType,
+    BigNumberType.firstByte.code to BigNumberType
 )
 
-private fun ByteArray.toDataType(): DataType<out Any> {
+internal fun ByteArray.toDataType(): DataType<out Any> {
     val firstByte = this[0].toInt()
     val dataType = dataTypeMap[firstByte] ?: throw IllegalArgumentException("Unknown data type: $firstByte")
 
     return dataType
 }
 
-private fun ByteArray.lengthUntilTerminator(offset: Int = 0): Int {
-    var len = offset
-
-    while (this[len].toInt() != TERMINATOR_FIRST_BYTE) {
-        len++
-    }
-
-    return len
-}
+private fun ByteArray.lengthUntilTerminator() = this.indexOf(TERMINATOR_FIRST_BYTE)
 
 private fun ByteArray.length(): Int {
     var len = 0
     var i = 1
 
-    while (this[i].toInt() != TERMINATOR_FIRST_BYTE) {
+    while (this[i] != TERMINATOR_FIRST_BYTE) {
         len = len * 10 + (this[i] - '0'.code)
         i++
     }
