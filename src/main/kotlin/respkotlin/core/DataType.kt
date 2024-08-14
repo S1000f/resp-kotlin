@@ -32,15 +32,34 @@ sealed interface AggregateType<T> : DataType<T> {
 
 sealed interface ContainerType<T> : AggregateType<T>
 
+sealed interface ErrorType {
+    val prefix: String
+    val message: String
+}
+
+data class SimpleError(
+    override val prefix: String,
+    override val message: String
+) : ErrorType
+
+data class BulkError(
+    override val prefix: String,
+    override val message: String
+) : ErrorType
+
 object SimpleStringType : SimpleType<String> {
     override fun serialize(data: String) = "$firstByte$data$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1)
     override val firstByte get() = '+'
 }
 
-object SimpleErrorType : SimpleType<String> {
-    override fun serialize(data: String) = "$firstByte$data$TERMINATOR".toByteArray()
-    override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1)
+object SimpleErrorType : SimpleType<SimpleError> {
+    override fun serialize(data: SimpleError) = "$firstByte${data.prefix} ${data.message}$TERMINATOR".toByteArray()
+    override fun deserialize(data: ByteArray) = SimpleStringType.deserialize(data).let {
+        val split = it.split(" ", limit = 2)
+        SimpleError(split[0], split[1])
+    }
+
     override val firstByte get() = '-'
 }
 
@@ -101,12 +120,25 @@ object BigNumberType : SimpleType<BigInteger> {
     override val firstByte get() = '('
 }
 
+object BulkErrorType : AggregateType<BulkError> {
+    override fun serialize(data: BulkError) =
+        "${data.prefix} ${data.message}".let { "$firstByte${it.length}$TERMINATOR$it$TERMINATOR".toByteArray() }
+
+    override fun deserialize(data: ByteArray) = BulkStringType.deserialize(data).let {
+        val split = it.split(" ", limit = 2)
+        BulkError(split[0], split[1])
+    }
+
+    override val firstByte get() = '!'
+}
+
 private fun serializeContainer(data: Any): ByteArray = when (data) {
     is String -> when (data.contains('\r') || data.contains('\n')) {
         true -> BulkStringType.serialize(data)
         false -> SimpleStringType.serialize(data)
     }
 
+    is SimpleError -> SimpleErrorType.serialize(data)
     is Int -> IntegerType.serialize(data.toLong())
     is Long -> IntegerType.serialize(data)
     is List<*> -> when (data.isEmpty()) {
@@ -119,6 +151,9 @@ private fun serializeContainer(data: Any): ByteArray = when (data) {
 
     is Unit -> NullType.serialize(Unit)
     is Boolean -> BooleanType.serialize(data)
+    is Double -> DoubleType.serialize(data)
+    is BigInteger -> BigNumberType.serialize(data)
+    is BulkError -> BulkErrorType.serialize(data)
     else -> throw IllegalArgumentException("Unknown data type: $data")
 }
 
@@ -171,7 +206,8 @@ private val dataTypeMap = mutableMapOf(
     NullType.firstByte.code to NullType,
     BooleanType.firstByte.code to BooleanType,
     DoubleType.firstByte.code to DoubleType,
-    BigNumberType.firstByte.code to BigNumberType
+    BigNumberType.firstByte.code to BigNumberType,
+    BulkErrorType.firstByte.code to BulkErrorType
 )
 
 internal fun ByteArray.toDataType(): DataType<out Any> {
