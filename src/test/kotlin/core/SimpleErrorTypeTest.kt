@@ -2,11 +2,24 @@ package core
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.assertThrows
 import respkotlin.core.SimpleError
 import respkotlin.core.SimpleErrorType
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class SimpleErrorTest {
+class SimpleErrorTypeTest {
+
+    @Test
+    fun `test simpleError data class`() {
+        SimpleError("ERR", "unknown command 'foobar'").apply {
+            assert(prefix == "ERR")
+            assert(message == "unknown command 'foobar'")
+        }
+
+        assertThrows<IllegalArgumentException> { SimpleError("ERR", "unknown\ncommand") }
+        assertThrows<IllegalArgumentException> { SimpleError("ERR", "\runknown command") }
+        assertThrows<IllegalArgumentException> { SimpleError("ERR", "unknown\r\ncommand") }
+    }
 
     @Test
     fun `test simple error deserializer`() {

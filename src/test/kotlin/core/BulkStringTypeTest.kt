@@ -5,7 +5,7 @@ import org.junit.jupiter.api.TestInstance
 import respkotlin.core.BulkStringType
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class BulkStringTest {
+class BulkStringTypeTest {
 
     @Test
     fun `test bulk string deserializer`() {

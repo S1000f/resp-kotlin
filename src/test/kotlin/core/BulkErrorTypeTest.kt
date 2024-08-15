@@ -2,11 +2,10 @@ package core
 
 import org.junit.jupiter.api.TestInstance
 import respkotlin.core.*
-import respkotlin.exchange
 import kotlin.test.Test
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class BulkErrorTest {
+class BulkErrorTypeTest {
 
     @Test
     fun `test bulk error deserializer`() {
