@@ -18,6 +18,7 @@ fun findDataType(data: ByteArray): Deserializer<Any> {
 }
 
 fun test() {
+
     val comm = ArrayType.serialize(listOf("GET", "key"))
     val (dataType, response) = exchange(comm)
     when (dataType) {

@@ -174,6 +174,19 @@ object SetType : ContainerType<Set<Any>, Set<Any>> {
     override val firstByte get() = '~'
 }
 
+object PushType : ContainerType<List<Any>, List<Any>> {
+    override fun serialize(data: List<Any>) = when (data.isEmpty()) {
+        true -> "${firstByte}0$TERMINATOR".toByteArray()
+        false -> {
+            val collect = data.map { serializeContainer(it) }
+            collect.fold("$firstByte${collect.size}$TERMINATOR".toByteArray(), ByteArray::plus)
+        }
+    }
+
+    override fun deserialize(data: ByteArray) = deserializeArray(data, mutableListOf()).first
+    override val firstByte get() = '>'
+}
+
 private fun serializeContainer(data: Any): ByteArray = when (data) {
     is String -> when (data.contains('\r') || data.contains('\n')) {
         true -> BulkStringType.serialize(data)
@@ -287,6 +300,7 @@ private fun deserializeElement(data: ByteArray) = when (val dataType = data.toDa
             is ArrayType -> deserializeArray(data, mutableListOf())
             is MapType -> deserializeMap(data)
             is SetType -> deserializeArray(data, mutableSetOf())
+            is PushType -> deserializeArray(data, mutableListOf())
         }
 
         else -> {
@@ -309,7 +323,8 @@ private val dataTypeMap = mutableMapOf(
     BulkErrorType.firstByte.code to BulkErrorType,
     VerbatimStringType.firstByte.code to VerbatimStringType,
     MapType.firstByte.code to MapType,
-    SetType.firstByte.code to SetType
+    SetType.firstByte.code to SetType,
+    PushType.firstByte.code to PushType
 )
 
 internal fun ByteArray.toDataType(): DataType<out Any, out Any> {
