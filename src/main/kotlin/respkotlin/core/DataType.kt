@@ -97,7 +97,7 @@ object BulkStringType : AggregateType<String, String> {
 
 object ArrayType : ContainerType<List<Any>, List<Any>> {
     override fun serialize(data: List<Any>) = serializeContainer(data)
-    override fun deserialize(data: ByteArray) = deserializeArray(data).first
+    override fun deserialize(data: ByteArray) = deserializeArray(data, mutableListOf()).first
     override val firstByte get() = '*'
 }
 
@@ -168,6 +168,12 @@ object MapType : ContainerType<Map<*, *>, Map<Any, Any>> {
     override val firstByte get() = '%'
 }
 
+object SetType : ContainerType<Set<Any>, Set<Any>> {
+    override fun serialize(data: Set<Any>) = serializeContainer(data)
+    override fun deserialize(data: ByteArray) = deserializeArray(data, mutableSetOf()).first
+    override val firstByte get() = '~'
+}
+
 private fun serializeContainer(data: Any): ByteArray = when (data) {
     is String -> when (data.contains('\r') || data.contains('\n')) {
         true -> BulkStringType.serialize(data)
@@ -199,12 +205,24 @@ private fun serializeContainer(data: Any): ByteArray = when (data) {
         }
     }
 
-    else -> throw IllegalArgumentException("Unknown data type: $data")
+    is Set<*> -> when (data.isEmpty()) {
+        true -> "${SetType.firstByte}0$TERMINATOR".toByteArray()
+        false -> {
+            val collect = data.map { serializeContainer(it!!) }
+            collect.fold("${SetType.firstByte}${collect.size}$TERMINATOR".toByteArray(), ByteArray::plus)
+        }
+    }
+
+    else -> {
+        data as ByteArray
+        @Suppress("UNCHECKED_CAST")
+        val dataType = data.toDataType() as? Serializer<Any> ?: throw IllegalArgumentException("Unknown type: $data")
+        dataType.serialize(data)
+    }
 }
 
-private fun deserializeArray(data: ByteArray): Pair<List<Any>, Int> {
+private fun <T : MutableCollection<Any>> deserializeArray(data: ByteArray, container: T): Pair<T, Int> {
     val numOfElements = data.length()
-    val list = mutableListOf<Any>()
     val prefix = data.lengthUntilTerminator() + TERMINATOR.length
 
     var round = data.sliceArray(prefix..<data.size)
@@ -216,7 +234,7 @@ private fun deserializeArray(data: ByteArray): Pair<List<Any>, Int> {
 
         val (element, len) = deserializeElement(round)
 
-        list.add(element)
+        container.add(element)
         totalLength += len
 
         if (count == numOfElements) {
@@ -226,7 +244,7 @@ private fun deserializeArray(data: ByteArray): Pair<List<Any>, Int> {
         round = round.sliceArray(len..<round.size)
     }
 
-    return list.toList() to totalLength
+    return container to totalLength
 }
 
 private fun deserializeMap(data: ByteArray): Pair<Map<Any, Any>, Int> {
@@ -266,8 +284,9 @@ private fun deserializeElement(data: ByteArray) = when (val dataType = data.toDa
 
     is AggregateType -> when (dataType) {
         is ContainerType -> when (dataType) {
-            is ArrayType -> deserializeArray(data)
+            is ArrayType -> deserializeArray(data, mutableListOf())
             is MapType -> deserializeMap(data)
+            is SetType -> deserializeArray(data, mutableSetOf())
         }
 
         else -> {
@@ -289,7 +308,8 @@ private val dataTypeMap = mutableMapOf(
     BigNumberType.firstByte.code to BigNumberType,
     BulkErrorType.firstByte.code to BulkErrorType,
     VerbatimStringType.firstByte.code to VerbatimStringType,
-    MapType.firstByte.code to MapType
+    MapType.firstByte.code to MapType,
+    SetType.firstByte.code to SetType
 )
 
 internal fun ByteArray.toDataType(): DataType<out Any, out Any> {
