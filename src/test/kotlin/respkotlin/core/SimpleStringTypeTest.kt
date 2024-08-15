@@ -1,4 +1,4 @@
-package core
+package respkotlin.core
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance

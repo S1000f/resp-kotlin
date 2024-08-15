@@ -1,4 +1,4 @@
-package core
+package respkotlin.core
 
 import org.junit.jupiter.api.TestInstance
 import respkotlin.core.VerbatimString

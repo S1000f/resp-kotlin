@@ -1,6 +1,11 @@
 package respkotlin
 
 import respkotlin.core.*
+import kotlin.reflect.KClass
+
+fun <S : Any, D: Any> registerDataType(kClass: KClass<S>, dataType: DataType<S, D>) {
+    putCustomDataType(kClass, dataType)
+}
 
 fun <T> exchange(command: ByteArray, deserializer: Deserializer<T>): T {
     println("Command: ${String(command)}")
@@ -11,10 +16,6 @@ fun <T> exchange(command: ByteArray, deserializer: Deserializer<T>): T {
 
 fun exchange(command: ByteArray): Pair<Deserializer<Any>, ByteArray> {
     return SimpleErrorType to "-ERR unknown error\r\n".toByteArray()
-}
-
-fun findDataType(data: ByteArray): Deserializer<Any> {
-    return data.toDataType()
 }
 
 fun test() {

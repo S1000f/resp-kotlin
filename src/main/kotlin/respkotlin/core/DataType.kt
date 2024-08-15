@@ -1,6 +1,7 @@
 package respkotlin.core
 
 import java.math.BigInteger
+import kotlin.reflect.KClass
 
 const val TERMINATOR = "\r\n"
 const val TERMINATOR_FIRST_BYTE = '\r'.code.toByte()
@@ -18,7 +19,7 @@ sealed interface DataCategory {
     val length: (ByteArray) -> Int
 }
 
-sealed interface DataType<S, D> : Serializer<S>, Deserializer<D>, DataCategory
+interface DataType<S, D> : Serializer<S>, Deserializer<D>, DataCategory
 
 sealed interface SimpleType<S, D> : DataType<S, D> {
     override val length: (ByteArray) -> Int
@@ -227,9 +228,7 @@ private fun serializeContainer(data: Any): ByteArray = when (data) {
     }
 
     else -> {
-        data as ByteArray
-        @Suppress("UNCHECKED_CAST")
-        val dataType = data.toDataType() as? Serializer<Any> ?: throw IllegalArgumentException("Unknown type: $data")
+        val dataType = findCustomDataType(data::class) ?: throw IllegalArgumentException("Unknown data type: $data")
         dataType.serialize(data)
     }
 }
@@ -308,6 +307,8 @@ private fun deserializeElement(data: ByteArray) = when (val dataType = data.toDa
             dataType.deserialize(data.sliceArray(0..<len)) to len
         }
     }
+
+    else -> throw IllegalArgumentException("Unknown data type: $dataType")
 }
 
 private val dataTypeMap = mutableMapOf(
@@ -332,6 +333,21 @@ internal fun ByteArray.toDataType(): DataType<out Any, out Any> {
     val dataType = dataTypeMap[firstByte] ?: throw IllegalArgumentException("Unknown data type: $firstByte")
 
     return dataType
+}
+
+private val customDataTypeMap = mutableMapOf<KClass<Any>, DataType<Any, Any>>()
+
+@Suppress("UNCHECKED_CAST")
+internal fun <S : Any, D : Any> putCustomDataType(kClass: KClass<S>, dataType: DataType<S, D>) {
+    kClass as? KClass<Any> ?: throw IllegalArgumentException("Type must be a subclass of Any")
+    dataType as? DataType<Any, Any> ?: throw IllegalArgumentException("Data type must be a subclass of DataType")
+
+    customDataTypeMap[kClass] = dataType
+    dataTypeMap[dataType.firstByte.code] = dataType
+}
+
+private fun findCustomDataType(serType: KClass<out Any>): DataType<Any, out Any>? {
+    return customDataTypeMap[serType]
 }
 
 fun ByteArray.lengthUntilTerminator() = this.indexOf(TERMINATOR_FIRST_BYTE)
