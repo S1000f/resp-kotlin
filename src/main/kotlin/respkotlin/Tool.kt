@@ -19,7 +19,6 @@ fun exchange(command: ByteArray): Pair<Deserializer<Any>, ByteArray> {
 }
 
 fun test() {
-
     val comm = ArrayType.serialize(listOf("GET", "key"))
     val (dataType, response) = exchange(comm)
     when (dataType) {
