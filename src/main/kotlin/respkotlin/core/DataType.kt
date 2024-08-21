@@ -19,14 +19,14 @@ sealed interface DataCategory {
     val length: (ByteArray) -> Int
 }
 
-interface DataType<S, D> : Serializer<S>, Deserializer<D>, DataCategory
+sealed interface DataType<S, D> : Serializer<S>, Deserializer<D>, DataCategory
 
-sealed interface SimpleType<S, D> : DataType<S, D> {
+interface SimpleType<S, D> : DataType<S, D> {
     override val length: (ByteArray) -> Int
         get() = { it.lengthUntilTerminator() }
 }
 
-sealed interface AggregateType<S, D> : DataType<S, D> {
+interface AggregateType<S, D> : DataType<S, D> {
     override val length: (ByteArray) -> Int
         get() = { it.length() }
 }
@@ -307,11 +307,9 @@ private fun deserializeElement(data: ByteArray) = when (val dataType = data.toDa
             dataType.deserialize(data.sliceArray(0..<len)) to len
         }
     }
-
-    else -> throw IllegalArgumentException("Unknown data type: $dataType")
 }
 
-private val dataTypeMap = mutableMapOf(
+internal val dataTypeMap = mutableMapOf(
     SimpleStringType.firstByte.code to SimpleStringType,
     SimpleErrorType.firstByte.code to SimpleErrorType,
     IntegerType.firstByte.code to IntegerType,
