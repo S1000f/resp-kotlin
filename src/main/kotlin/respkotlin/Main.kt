@@ -10,12 +10,6 @@ fun sendCommand(output: OutputStream, command: ByteArray) {
     output.flush()
 }
 
-fun readResponse(input: InputStream): ByteArray {
-    val buffer = ByteArray(1024)
-    input.read(buffer)
-
-    return buffer
-}
 
 fun convertInputStreamToByteArray(inputStream: InputStream): ByteArray {
     val buffer = ByteArray(60) // Buffer size, e.g., 1KB
@@ -43,9 +37,9 @@ fun main() {
 
         sendCommand(output, comm)
 
-        val response = convertInputStreamToByteArray(input)
+        val response = readResponse(input)
         val deserialize = MapType.deserialize(response)
-        println(deserialize)
+        println("deserialized: $deserialize")
     }
 
 }
