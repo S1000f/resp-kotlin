@@ -28,39 +28,39 @@ fun readResponse(input: InputStream, bufferSize: Int = 1024): ByteArray {
     }
 
     return when (val dataType = buffer.toDataType()) {
-        is SimpleType -> readSimpleType(input, buffer).first
+        is SimpleType -> readSimpleType(input, buffer)
         is AggregateType -> when (dataType) {
-            is ContainerType -> readContainerType(input, buffer).first
-            else -> readAggregateType(input, buffer).first
+            is ContainerType -> readContainerType(input, buffer)
+            else -> readAggregateType(input, buffer)
         }
     }
 }
 
-private fun readSimpleType(input: InputStream, preRead: ByteArray): Pair<ByteArray, Int> {
+private fun readSimpleType(input: InputStream, preRead: ByteArray): ByteArray {
     val collect = preRead.takeWhile { it != '\n'.code.toByte() }.let {
-        if (it.last() == '\r'.code.toByte()) return it.toByteArray() + '\n'.code.toByte() to 1
+        if (it.last() == '\r'.code.toByte()) return it.toByteArray() + '\n'.code.toByte()
         else it.toByteArray()
     }
 
-    return collect + readUntilTerminator(input) to 1
+    return collect + readUntilTerminator(input)
 }
 
-private fun readAggregateType(input: InputStream, preRead: ByteArray): Pair<ByteArray, Int> {
+private fun readAggregateType(input: InputStream, preRead: ByteArray): ByteArray {
     val normalized = normalize(input, preRead)
     val length = normalized.toDataType().length(normalized) + TERMINATOR.length
     val prefix = normalized.lengthUntilTerminator() + TERMINATOR.length
 
     val collect = when {
         length <= (normalized.size - prefix) ->
-            return normalized.sliceArray(0..<prefix + length + TERMINATOR.length) to 1
+            return normalized.sliceArray(0..<prefix + length + TERMINATOR.length)
 
         else -> input.readNBytes(length - normalized.size + prefix)
     }
 
-    return normalized + collect to 1
+    return normalized + collect
 }
 
-private fun readContainerType(input: InputStream, preRead: ByteArray): Pair<ByteArray, Int> {
+private fun readContainerType(input: InputStream, preRead: ByteArray): ByteArray {
     val normalized = normalize(input, preRead)
 
     val size = when (val dataType = normalized.toDataType()) {
@@ -68,7 +68,7 @@ private fun readContainerType(input: InputStream, preRead: ByteArray): Pair<Byte
         else -> dataType.length(normalized)
     }
 
-    if (size == 0) return normalized to 1
+    if (size == 0) return normalized
 
     val collect = mutableListOf<ByteArray>()
     val prefix = normalized.lengthUntilTerminator() + TERMINATOR.length
@@ -80,9 +80,7 @@ private fun readContainerType(input: InputStream, preRead: ByteArray): Pair<Byte
     }
 
     while (size > countRead) {
-        val dataType = round.toDataType()
-
-        val (bytes, count) = when (dataType) {
+        val bytes = when (val dataType = round.toDataType()) {
             is SimpleType -> readSimpleType(input, round)
             is AggregateType -> when (dataType) {
                 is ContainerType -> readContainerType(input, round)
@@ -90,7 +88,7 @@ private fun readContainerType(input: InputStream, preRead: ByteArray): Pair<Byte
             }
         }
 
-        countRead += count
+        countRead++
         collect.add(bytes)
 
         if (countRead == size) break
@@ -106,7 +104,7 @@ private fun readContainerType(input: InputStream, preRead: ByteArray): Pair<Byte
         else -> collect.reduce(ByteArray::plus)
     }
 
-    return normalized.sliceArray(0..<prefix) + data to countRead
+    return normalized.sliceArray(0..<prefix) + data
 }
 
 private fun normalize(input: InputStream, preRead: ByteArray) = when {
