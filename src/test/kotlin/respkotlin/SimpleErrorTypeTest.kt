@@ -1,10 +1,8 @@
-package respkotlin.core
+package respkotlin
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.assertThrows
-import respkotlin.core.SimpleError
-import respkotlin.core.SimpleErrorType
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SimpleErrorTypeTest {

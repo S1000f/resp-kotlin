@@ -1,6 +1,5 @@
 package respkotlin
 
-import respkotlin.core.*
 import java.io.InputStream
 import kotlin.reflect.KClass
 
@@ -20,6 +19,8 @@ fun exchange(command: ByteArray): Pair<Deserializer<Any>, ByteArray> {
 }
 
 fun readResponse(input: InputStream, bufferSize: Int = 1024): ByteArray {
+    require(bufferSize > 0) { "Buffer size must be greater than 0" }
+
     val buffer = ByteArray(bufferSize)
     val read = input.read(buffer)
 
@@ -37,31 +38,28 @@ fun readResponse(input: InputStream, bufferSize: Int = 1024): ByteArray {
 }
 
 private fun readSimpleType(input: InputStream, preRead: ByteArray): ByteArray {
-    val collect = preRead.takeWhile { it != '\n'.code.toByte() }.let {
-        if (it.last() == '\r'.code.toByte()) return it.toByteArray() + '\n'.code.toByte()
-        else it.toByteArray()
-    }
+    val normalized = readUntilTerminator(input, preRead)
+    val indexOfFirst = normalized.indexOfFirst { it == '\n'.code.toByte() }
 
-    return collect + readUntilTerminator(input)
+    return when {
+        (indexOfFirst < normalized.size - 1) -> normalized.sliceArray(0..indexOfFirst)
+        else -> normalized
+    }
 }
 
 private fun readAggregateType(input: InputStream, preRead: ByteArray): ByteArray {
-    val normalized = normalize(input, preRead)
+    val normalized = readUntilTerminator(input, preRead)
     val length = normalized.toDataType().length(normalized) + TERMINATOR.length
     val prefix = normalized.lengthUntilTerminator() + TERMINATOR.length
 
-    val collect = when {
-        length <= (normalized.size - prefix) ->
-            return normalized.sliceArray(0..<prefix + length + TERMINATOR.length)
-
-        else -> input.readNBytes(length - normalized.size + prefix)
+    return when {
+        (normalized.size >= prefix + length) -> normalized.sliceArray(0..<prefix + length)
+        else -> normalized + input.readNBytes(length - normalized.size + prefix)
     }
-
-    return normalized + collect
 }
 
 private fun readContainerType(input: InputStream, preRead: ByteArray): ByteArray {
-    val normalized = normalize(input, preRead)
+    val normalized = readUntilTerminator(input, preRead)
 
     val size = when (val dataType = normalized.toDataType()) {
         is MapType -> dataType.length(normalized) * 2
@@ -94,7 +92,7 @@ private fun readContainerType(input: InputStream, preRead: ByteArray): ByteArray
         if (countRead == size) break
 
         round = when {
-            round.size > bytes.size -> round.sliceArray(0..round.size)
+            round.size > bytes.size -> round.sliceArray(bytes.size..<round.size)
             else -> ByteArray(1) { input.read().toByte() }
         }
     }
@@ -107,22 +105,21 @@ private fun readContainerType(input: InputStream, preRead: ByteArray): ByteArray
     return normalized.sliceArray(0..<prefix) + data
 }
 
-private fun normalize(input: InputStream, preRead: ByteArray) = when {
-    !preRead.contains('\n'.code.toByte()) -> preRead + readUntilTerminator(input)
-    else -> preRead
-}
+private fun readUntilTerminator(input: InputStream, preRead: ByteArray = ByteArray(0)) = when {
+    !preRead.contains('\n'.code.toByte()) -> {
+        val collect = mutableListOf<Byte>()
 
-private fun readUntilTerminator(input: InputStream): ByteArray {
-    val collect = mutableListOf<Byte>()
+        while (true) {
+            val read = input.read()
+            if (read == -1) break
+            collect.add(read.toByte())
+            if (read == '\n'.code) break
+        }
 
-    while (true) {
-        val read = input.read()
-        if (read == -1) break
-        collect.add(read.toByte())
-        if (read == '\n'.code) break
+        if (preRead.isNotEmpty()) preRead + collect.toByteArray() else collect.toByteArray()
     }
 
-    return collect.toByteArray()
+    else -> preRead
 }
 
 fun test() {

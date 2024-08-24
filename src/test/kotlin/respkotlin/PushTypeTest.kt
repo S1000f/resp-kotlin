@@ -1,8 +1,7 @@
-package respkotlin.core
+package respkotlin
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
-import respkotlin.core.PushType
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class PushTypeTest {

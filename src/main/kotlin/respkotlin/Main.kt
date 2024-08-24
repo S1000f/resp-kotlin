@@ -1,7 +1,5 @@
 package respkotlin
 
-import respkotlin.core.BulkStringType
-import respkotlin.core.MapType
 import java.io.*
 import java.net.Socket
 

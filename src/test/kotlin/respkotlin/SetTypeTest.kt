@@ -1,7 +1,6 @@
-package respkotlin.core
+package respkotlin
 
 import org.junit.jupiter.api.TestInstance
-import respkotlin.core.SetType
 import kotlin.test.Test
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)

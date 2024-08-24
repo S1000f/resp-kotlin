@@ -1,8 +1,6 @@
 package respkotlin
 
 import org.junit.jupiter.api.TestInstance
-import respkotlin.core.*
-import respkotlin.core.toDataType
 import java.time.LocalDateTime
 import kotlin.test.Test
 
@@ -10,173 +8,244 @@ import kotlin.test.Test
 class ToolTest {
 
     @Test
-    fun test() {
-        val now = LocalDateTime.now()
-        val serialize = LocalDateTimeType.serialize(now)
-        println(String(serialize))
+    fun `test readResponse with simple type`() {
+        for (size in 1..34) {
+            // given
+            val data = "+This is the test simple string\r\n".toByteArray()
+            val inputStream = data.inputStream()
+            // when
+            val readResponse = readResponse(inputStream, size)
+            // then
+            assert(readResponse.contentEquals(data))
+        }
 
-        val deserialize = LocalDateTimeType.deserialize(serialize)
-        println(deserialize)
-    }
+        for (size in 1..6) {
+            // given
+            val data1 = ":42\r\n".toByteArray()
+            val inputStream1 = data1.inputStream()
+            // when
+            val readResponse1 = readResponse(inputStream1, size)
+            // then
+            assert(readResponse1.contentEquals(data1))
+        }
 
-    @Test
-    fun test1() {
-        registerDataType(LocalDateTime::class, LocalDateTimeType)
+        for (size in 1..7) {
+            // given
+            val data2 = ":-42\r\n".toByteArray()
+            val inputStream2 = data2.inputStream()
+            // when
+            val readResponse2 = readResponse(inputStream2, size)
+            // then
+            assert(readResponse2.contentEquals(data2))
+        }
 
-        val now = LocalDateTime.now()
-        val serialize = LocalDateTimeType.serialize(now)
-
-        when (val dataType = serialize.toDataType()) {
-            is LocalDateTimeType -> {
-                val deserialize = dataType.deserialize(serialize)
-                println(deserialize)
-            }
-
-            else -> println("error")
+        for (size in 1..6) {
+            // given
+            val data2 = "-ERR this is an error message\r\n".toByteArray()
+            val inputStream2 = data2.inputStream()
+            // when
+            val readResponse2 = readResponse(inputStream2, size)
+            // then
+            assert(readResponse2.contentEquals(data2))
         }
     }
 
     @Test
-    fun test2() {
-        registerDataType(LocalDateTime::class, LocalDateTimeType)
-
-        val now = LocalDateTime.now()
-        val list = listOf(now, 42L)
-        val serialize = ArrayType.serialize(list)
-
-        println(String(serialize))
-    }
-
-    @Test
-    fun `test readResponse with simple type`() {
-        // given
-        val data = "+This is the test simple string\r\n".toByteArray()
-        val inputStream = data.inputStream()
-        // when
-        val readResponse = readResponse(inputStream)
-        // then
-        assert(readResponse.contentEquals(data))
-
-        // given
-        val data1 = "-This is the test error string\r\n".toByteArray()
-        val inputStream1 = data1.inputStream()
-        // when
-        val readResponse1 = readResponse(inputStream1, 8)
-        // then
-        assert(readResponse1.contentEquals(data1))
-    }
-
-    @Test
     fun `test readResponse with aggregate type`() {
-        // given
-        val data = "$23\r\nthis is the test string\r\n".toByteArray()
-        val inputStream = data.inputStream()
-        // when
-        val readResponse = readResponse(inputStream)
-        // then
-        assert(readResponse.contentEquals(data))
+        for (size in 1..31) {
+            // given
+            val data = "$23\r\nthis is the test string\r\n".toByteArray()
+            val inputStream = data.inputStream()
+            // when
+            val readResponse = readResponse(inputStream, size)
+            // then
+            assert(readResponse.contentEquals(data))
+        }
 
-        // given
-        val data1 = "$37\r\nthis is the test string\nhello, world!\r\n".toByteArray()
-        val inputStream1 = data1.inputStream()
-        // when
-        val readResponse1 = readResponse(inputStream1, 8)
-        // then
-        assert(readResponse1.contentEquals(data1))
+        for (size in 1..45) {
+            // given
+            val data1 = "$37\r\nthis is the test string\nhello, world!\r\n".toByteArray()
+            val inputStream1 = data1.inputStream()
+            // when
+            val readResponse1 = readResponse(inputStream1, size)
+            // then
+            assert(readResponse1.contentEquals(data1))
+        }
+
+        for (size in 1..23) {
+            // given
+            val data1 = "=15\r\ntxt:Some string\r\n".toByteArray()
+            val inputStream1 = data1.inputStream()
+            // when
+            val readResponse1 = readResponse(inputStream1, size)
+            // then
+            assert(readResponse1.contentEquals(data1))
+        }
     }
 
     @Test
     fun `test readResponse with array container type`() {
-        // given
-        val data = "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n".toByteArray()
-        val inputStream = data.inputStream()
-        // when
-        val readResponse = readResponse(inputStream)
-        // then
-        assert(readResponse.contentEquals(data))
+        for (size in 1..19) {
+            // given
+            val data = "*2\r\n+okr\n$3\r\nbar\r\n".toByteArray()
+            val inputStream = data.inputStream()
+            // when
+            val response = readResponse(inputStream, size)
+            // then
+            assert(response.contentEquals(data))
+        }
 
-        // given
-        val data1 = "*3\r\n$3\r\nfoo\r\n$3\r\nbar\r\n:42\r\n".toByteArray()
-        val inputStream1 = data1.inputStream()
-        // when
-        val readResponse1 = readResponse(inputStream1, 8)
-        // then
-        assert(readResponse1.contentEquals(data1))
+        for (size in 1..27) {
+            // given
+            val data1 = "*3\r\n$3\r\nfoo\r\n$3\r\nbar\r\n:-42\r\n".toByteArray()
+            val inputStream1 = data1.inputStream()
+            // when
+            val readResponse1 = readResponse(inputStream1, size)
+            // then
+            assert(readResponse1.contentEquals(data1))
+        }
 
-        // given
-        val data2 = "~3\r\n+ok\r\n+hello world\r\n+kotlin\r\n".toByteArray()
-        val inputStream2 = data2.inputStream()
-        // when
-        val readResponse2 = readResponse(inputStream2)
-        // then
-        assert(readResponse2.contentEquals(data2))
+        for (size in 1..32) {
+            // given
+            val data2 = "~3\r\n+ok\r\n+hello world\r\n+kotlin\r\n".toByteArray()
+            val inputStream2 = data2.inputStream()
+            // when
+            val readResponse2 = readResponse(inputStream2, size)
+            // then
+            assert(readResponse2.contentEquals(data2))
+        }
     }
 
     @Test
     fun `test readResponse with nested array`() {
-        // given
-        val data = "*2\r\n$3\r\nfoo\r\n*2\r\n$3\r\nbar\r\n:42\r\n".toByteArray()
-        val inputStream = data.inputStream()
-        // when
-        val readResponse = readResponse(inputStream)
-        // then
-        assert(readResponse.contentEquals(data))
+        for (size in 1..32) {
+            // given
+            val data = "*2\r\n$3\r\nfoo\r\n*2\r\n$3\r\nbar\r\n:+42\r\n".toByteArray()
+            val inputStream = data.inputStream()
+            // when
+            val readResponse = readResponse(inputStream, size)
+            // then
+            assert(readResponse.contentEquals(data))
+        }
 
-        // given
-        val data1 = "*2\r\n~1\r\n+foo\r\n*2\r\n+bar\r\n:42\r\n".toByteArray()
-        val inputStream1 = data1.inputStream()
-        // when
-        val readResponse1 = readResponse(inputStream1, 8)
-        // then
-        assert(readResponse1.contentEquals(data1))
+        for (size in 1..30) {
+            // given
+            val data1 = "*2\r\n~1\r\n+foo\r\n*2\r\n+bar\r\n:42\r\n".toByteArray()
+            val inputStream1 = data1.inputStream()
+            // when
+            val readResponse1 = readResponse(inputStream1, size)
+            // then
+            assert(readResponse1.contentEquals(data1))
+        }
 
-        // given
-        val data2 = "*2\r\n%1\r\n+foo\r\n:42\r\n*2\r\n$3\r\nbaz\r\n:3\r\n".toByteArray()
-        val inputStream2 = data2.inputStream()
-        // when
-        val readResponse2 = readResponse(inputStream2, 8)
-        // then
-        assert(readResponse2.contentEquals(data2))
+        for (size in 1..37) {
+            // given
+            val data2 = "*2\r\n%1\r\n+foo\r\n:42\r\n*2\r\n$3\r\nbaz\r\n:3\r\n".toByteArray()
+            val inputStream2 = data2.inputStream()
+            // when
+            val readResponse2 = readResponse(inputStream2, size)
+            // then
+            assert(readResponse2.contentEquals(data2))
+        }
     }
 
     @Test
     fun `test readResponse with map container type`() {
-        // given
-        val data = "%2\r\n+key\r\n$3\r\nfoo\r\n+key2\r\n:42\r\n".toByteArray()
-        val inputStream = data.inputStream()
-        // when
-        val readResponse = readResponse(inputStream)
-        // then
-        assert(readResponse.contentEquals(data))
+        for (size in 1..33) {
+            // given
+            val data = "%2\r\n+key\r\n$3\r\nfoo\r\n+key2\r\n:-42\r\n".toByteArray()
+            val inputStream = data.inputStream()
+            // when
+            val readResponse = readResponse(inputStream, size)
+            // then
+            assert(readResponse.contentEquals(data))
+        }
 
-        // given
-        val data1 = "%2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n$2\r\nbz\r\n:42\r\n".toByteArray()
-        val inputStream1 = data1.inputStream()
-        // when
-        val readResponse1 = readResponse(inputStream1, 8)
-        // then
-        assert(readResponse1.contentEquals(data1))
+        for (size in 1..36) {
+            // given
+            val data1 = "%2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n$2\r\nbz\r\n:42\r\n".toByteArray()
+            val inputStream1 = data1.inputStream()
+            // when
+            val readResponse1 = readResponse(inputStream1, size)
+            // then
+            assert(readResponse1.contentEquals(data1))
+        }
     }
 
     @Test
     fun `test readResponse with nested map container`() {
-        // given
-        val data = "%2\r\n$3\r\nkey\r\n*2\r\n+foo\r\n:42\r\n$3\r\nbar\r\n$3\r\nbaz\r\n".toByteArray()
-        val inputStream = data.inputStream()
-        // when
-        val readResponse = readResponse(inputStream, 8)
-        // then
-        assert(readResponse.contentEquals(data))
+        for (size in 1..47) {
+            // given
+            val data = "%2\r\n$3\r\nkey\r\n*2\r\n+foo\r\n:42\r\n$3\r\nbar\r\n$3\r\nbaz\r\n".toByteArray()
+            val inputStream = data.inputStream()
+            // when
+            val readResponse = readResponse(inputStream, size)
+            // then
+            assert(readResponse.contentEquals(data))
+        }
 
-        // given
-        val data1 = "%2\r\n*1\r\n+key\r\n%1\r\n+foo\r\n:42\r\n*2\r\n+bar\r\n$3\r\nbaz\r\n:1000\r\n".toByteArray()
-        val inputStream1 = data1.inputStream()
-        // when
-        val readResponse1 = readResponse(inputStream1, 8)
-        // then
-        assert(readResponse1.contentEquals(data1))
+        for (size in 1..57) {
+            // given
+            val data1 = "%2\r\n*1\r\n+key\r\n%1\r\n+foo\r\n:-42\r\n*2\r\n+bar\r\n$3\r\nbaz\r\n:1000\r\n".toByteArray()
+            val inputStream1 = data1.inputStream()
+            // when
+            val readResponse1 = readResponse(inputStream1, size)
+            // then
+            assert(readResponse1.contentEquals(data1))
+        }
     }
 
+    @Test
+    fun `test customized data type`() {
+        // given
+        val now = LocalDateTime.now()
+        //when
+        val serialize = LocalDateTimeType.serialize(now)
+        val deserialize = LocalDateTimeType.deserialize(serialize)
+        // then
+        assert(now == deserialize)
+
+        // given
+        val data = "t2024-08-24T21:38:00.000000\r\n".toByteArray()
+        // when
+        val deserialize1 = LocalDateTimeType.deserialize(data)
+        // then
+        assert(LocalDateTime.parse("2024-08-24T21:38:00.000000") == deserialize1)
+    }
+
+    @Test
+    fun `test registerDataType method`() {
+        // given
+        registerDataType(LocalDateTime::class, LocalDateTimeType)
+        val now = LocalDateTime.now()
+        val serialize = LocalDateTimeType.serialize(now)
+        // when
+        val findDataType = serialize.toDataType()
+        // then
+        assert(findDataType is SimpleType<*, *>)
+        assert(findDataType is LocalDateTimeType)
+    }
+
+    @Test
+    fun `test custom data type with a container`() {
+        // given
+        registerDataType(LocalDateTime::class, LocalDateTimeType)
+        val now = LocalDateTime.now()
+        val list = listOf(now, 42L)
+        // when
+        val serialize = ArrayType.serialize(list)
+        // then
+        val expect = "*2\r\n".toByteArray() + LocalDateTimeType.serialize(now) + ":42\r\n".toByteArray()
+        assert(serialize.contentEquals(expect))
+
+        // given
+        val data = "*2\r\n$3\r\nfoo\r\nt2024-08-24T21:38:00.000000\r\n".toByteArray()
+        // when
+        val deserialize = ArrayType.deserialize(data)
+        // then
+        assert(deserialize[0] == "foo")
+        assert(deserialize[1] == LocalDateTime.parse("2024-08-24T21:38:00.000000"))
+    }
 }
 
 object LocalDateTimeType : SimpleType<LocalDateTime, LocalDateTime> {

@@ -1,4 +1,4 @@
-package respkotlin.core
+package respkotlin
 
 import java.math.BigInteger
 import kotlin.reflect.KClass
@@ -98,7 +98,7 @@ object BulkStringType : AggregateType<String, String> {
 
 object ArrayType : ContainerType<List<Any>, List<Any>> {
     override fun serialize(data: List<Any>) = serializeContainer(data)
-    override fun deserialize(data: ByteArray) = deserializeArray(data, mutableListOf()).first
+    override fun deserialize(data: ByteArray) = deserializeArray(data, mutableListOf()).first.toList()
     override val firstByte get() = '*'
 }
 
@@ -171,7 +171,7 @@ object MapType : ContainerType<Map<*, *>, Map<Any, Any>> {
 
 object SetType : ContainerType<Set<Any>, Set<Any>> {
     override fun serialize(data: Set<Any>) = serializeContainer(data)
-    override fun deserialize(data: ByteArray) = deserializeArray(data, mutableSetOf()).first
+    override fun deserialize(data: ByteArray) = deserializeArray(data, mutableSetOf()).first.toSet()
     override val firstByte get() = '~'
 }
 
@@ -184,7 +184,7 @@ object PushType : ContainerType<List<Any>, List<Any>> {
         }
     }
 
-    override fun deserialize(data: ByteArray) = deserializeArray(data, mutableListOf()).first
+    override fun deserialize(data: ByteArray) = deserializeArray(data, mutableListOf()).first.toList()
     override val firstByte get() = '>'
 }
 
