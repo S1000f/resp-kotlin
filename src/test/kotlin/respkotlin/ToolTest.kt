@@ -246,6 +246,30 @@ class ToolTest {
         assert(deserialize[0] == "foo")
         assert(deserialize[1] == LocalDateTime.parse("2024-08-24T21:38:00.000000"))
     }
+
+    @Test
+    fun `test createCommand method`() {
+        // given
+        val command = "SET"
+        val key = "key"
+        val value = "value"
+        // when
+        val createCommand = createCommand(command, key, value)
+        // then
+        assert(createCommand.contentEquals("*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n".toByteArray()))
+
+        // given
+        val list = listOf(command, key, value)
+        // when
+        val createCommand1 = createCommand(list)
+        // then
+        assert(createCommand1.contentEquals("*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n".toByteArray()))
+
+        // when
+        val toCommand = list.toCommand()
+        // then
+        assert(toCommand.contentEquals("*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n".toByteArray()))
+    }
 }
 
 object LocalDateTimeType : SimpleType<LocalDateTime, LocalDateTime> {

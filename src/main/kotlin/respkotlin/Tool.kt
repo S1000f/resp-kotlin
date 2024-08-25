@@ -3,19 +3,65 @@ package respkotlin
 import java.io.InputStream
 import kotlin.reflect.KClass
 
-fun <S : Any, D : Any> registerDataType(kClass: KClass<S>, dataType: DataType<S, D>) {
+fun <S : Any, D : Any> registerDataType(kClass: KClass<S>, dataType: DataType<S, D>) =
     putCustomDataType(kClass, dataType)
-}
 
-fun <T> exchange(command: ByteArray, deserializer: Deserializer<T>): T {
-    println("Command: ${String(command)}")
-    val byteArray = ByteArray(1024)
+fun createCommand(command: List<String>) =
+    command.map { BulkStringType.serialize(it) }
+        .fold("*${command.size}\r\n".toByteArray(), ByteArray::plus)
 
-    return deserializer.deserialize(byteArray)
-}
+fun createCommand(vararg command: String) = createCommand(command.toList())
 
-fun exchange(command: ByteArray): Pair<Deserializer<Any>, ByteArray> {
-    return SimpleErrorType to "-ERR unknown error\r\n".toByteArray()
+fun List<String>.toCommand() = createCommand(this)
+
+interface HelloResponse {
+    val server: String
+    val version: String
+    val proto: Long
+    val id: Long?
+    val mode: String?
+    val role: String?
+    val modules: List<String>?
+    fun getAttribute(key: String): Any?
+
+    private data class HelloResponseDefault(
+        override val server: String,
+        override val version: String,
+        override val proto: Long,
+        override val id: Long?,
+        override val mode: String?,
+        override val role: String?,
+        override val modules: List<String>?
+    ) : HelloResponse {
+        private val attributes = mutableMapOf<String, Any>()
+
+        fun addAttribute(key: String, value: Any) {
+            attributes[key] = value
+        }
+
+        override fun getAttribute(key: String) = attributes[key]
+    }
+
+    companion object {
+        fun create(data: Map<Any, Any>): HelloResponse {
+            val server = data["server"] as String
+            val version = data["version"] as String
+            val proto = data["proto"] as Long
+            val id = data["id"]?.let { it as Long }
+            val mode = data["mode"] as String?
+            val role = data["role"] as String?
+
+            @Suppress("UNCHECKED_CAST")
+            val modules = data["modules"] as? List<String> ?: emptyList()
+
+            val response = HelloResponseDefault(server, version, proto, id, mode, role, modules)
+            data.forEach { (key, value) -> response.addAttribute(key.toString(), value) }
+
+            return response
+        }
+
+        fun create(data: ByteArray) = create(MapType.deserialize(data))
+    }
 }
 
 fun readResponse(input: InputStream, bufferSize: Int = 1024): ByteArray {
@@ -120,16 +166,4 @@ private fun readUntilTerminator(input: InputStream, preRead: ByteArray = ByteArr
     }
 
     else -> preRead
-}
-
-fun test() {
-    val comm = ArrayType.serialize(listOf("GET", "key"))
-    val (dataType, response) = exchange(comm)
-    when (dataType) {
-        is SimpleStringType -> dataType.deserialize(response)
-        is ErrorType -> {
-            val error = dataType.deserialize(response)
-            println("Error: ${error.prefix} ${error.message}")
-        }
-    }
 }

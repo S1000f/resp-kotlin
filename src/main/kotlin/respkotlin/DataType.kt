@@ -1,6 +1,7 @@
 package respkotlin
 
 import java.math.BigInteger
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 
 const val TERMINATOR = "\r\n"
@@ -179,8 +180,8 @@ object PushType : ContainerType<List<Any>, List<Any>> {
     override fun serialize(data: List<Any>) = when (data.isEmpty()) {
         true -> "${firstByte}0$TERMINATOR".toByteArray()
         false -> {
-            val collect = data.map { serializeContainer(it) }
-            collect.fold("$firstByte${collect.size}$TERMINATOR".toByteArray(), ByteArray::plus)
+            val list = data.map { serializeContainer(it) }
+            list.fold("$firstByte${list.size}$TERMINATOR".toByteArray(), ByteArray::plus)
         }
     }
 
@@ -309,21 +310,23 @@ private fun deserializeElement(data: ByteArray) = when (val dataType = data.toDa
     }
 }
 
-internal val dataTypeMap = mutableMapOf(
-    SimpleStringType.firstByte.code to SimpleStringType,
-    SimpleErrorType.firstByte.code to SimpleErrorType,
-    IntegerType.firstByte.code to IntegerType,
-    BulkStringType.firstByte.code to BulkStringType,
-    ArrayType.firstByte.code to ArrayType,
-    NullType.firstByte.code to NullType,
-    BooleanType.firstByte.code to BooleanType,
-    DoubleType.firstByte.code to DoubleType,
-    BigNumberType.firstByte.code to BigNumberType,
-    BulkErrorType.firstByte.code to BulkErrorType,
-    VerbatimStringType.firstByte.code to VerbatimStringType,
-    MapType.firstByte.code to MapType,
-    SetType.firstByte.code to SetType,
-    PushType.firstByte.code to PushType
+internal val dataTypeMap = ConcurrentHashMap(
+    mutableMapOf(
+        SimpleStringType.firstByte.code to SimpleStringType,
+        SimpleErrorType.firstByte.code to SimpleErrorType,
+        IntegerType.firstByte.code to IntegerType,
+        BulkStringType.firstByte.code to BulkStringType,
+        ArrayType.firstByte.code to ArrayType,
+        NullType.firstByte.code to NullType,
+        BooleanType.firstByte.code to BooleanType,
+        DoubleType.firstByte.code to DoubleType,
+        BigNumberType.firstByte.code to BigNumberType,
+        BulkErrorType.firstByte.code to BulkErrorType,
+        VerbatimStringType.firstByte.code to VerbatimStringType,
+        MapType.firstByte.code to MapType,
+        SetType.firstByte.code to SetType,
+        PushType.firstByte.code to PushType
+    )
 )
 
 internal fun ByteArray.toDataType(): DataType<out Any, out Any> {
@@ -333,7 +336,7 @@ internal fun ByteArray.toDataType(): DataType<out Any, out Any> {
     return dataType
 }
 
-private val customDataTypeMap = mutableMapOf<KClass<Any>, DataType<Any, Any>>()
+private val customDataTypeMap = ConcurrentHashMap<KClass<Any>, DataType<Any, Any>>()
 
 @Suppress("UNCHECKED_CAST")
 internal fun <S : Any, D : Any> putCustomDataType(kClass: KClass<S>, dataType: DataType<S, D>) {
