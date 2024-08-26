@@ -270,6 +270,61 @@ class ToolTest {
         // then
         assert(toCommand.contentEquals("*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n".toByteArray()))
     }
+
+    @Test
+    fun `test HelloResponse`() {
+        // given
+        val data = "%7\r\n$6\r\nserver\r\n$5\r\nredis\r\n$7\r\nversion\r\n$5\r\n7.0.9\r\n$5\r\nproto\r\n:3\r\n$2\r\n" +
+                "id\r\n:175\r\n$4\r\nmode\r\n$10\r\nstandalone\r\n$4\r\nrole\r\n$6\r\nmaster\r\n$7\r\nmodules\r\n*0\r\n"
+
+        // when
+        val helloResponse = HelloResponse.create(data.toByteArray())
+        // then
+        assert(helloResponse.server == "redis")
+        assert(helloResponse.version == "7.0.9")
+        assert(helloResponse.proto == 3L)
+        assert(helloResponse.id == 175L)
+        assert(helloResponse.mode == "standalone")
+        assert(helloResponse.role == "master")
+        assert(helloResponse.modules?.isEmpty() == true)
+
+        // when
+        val deserialize = MapType.deserialize(data.toByteArray())
+        val helloResponse1 = HelloResponse.create(deserialize)
+        // then
+        assert(helloResponse1.server == "redis")
+        assert(helloResponse1.version == "7.0.9")
+        assert(helloResponse1.proto == 3L)
+
+        // given
+        val data1 = "%3\r\n$6\r\nserver\r\n$5\r\nredis\r\n$7\r\nversion\r\n$5\r\n7.0.9\r\n$5\r\nproto\r\n:3\r\n"
+        // when
+        val helloResponse2 = HelloResponse.create(data1.toByteArray())
+        // then
+        assert(helloResponse2.server == "redis")
+        assert(helloResponse2.version == "7.0.9")
+        assert(helloResponse2.proto == 3L)
+        assert(helloResponse2.id == null)
+        assert(helloResponse2.mode == null)
+        assert(helloResponse2.role == null)
+    }
+
+    @Test
+    fun `test helloCommand`() {
+        // given
+        val proto = 3L
+        // when
+        val helloCommand = helloCommand(proto)
+        // then
+        assert(helloCommand.contentEquals("*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n".toByteArray()))
+
+        // given
+        val args = arrayOf("key", "value")
+        // when
+        val helloCommand1 = helloCommand(proto, *args)
+        // then
+        assert(helloCommand1.contentEquals("*4\r\n$5\r\nHELLO\r\n$1\r\n3\r\n$3\r\nkey\r\n$5\r\nvalue\r\n".toByteArray()))
+    }
 }
 
 object LocalDateTimeType : SimpleType<LocalDateTime, LocalDateTime> {

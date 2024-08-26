@@ -14,6 +14,10 @@ fun createCommand(vararg command: String) = createCommand(command.toList())
 
 fun List<String>.toCommand() = createCommand(this)
 
+fun helloCommand(proto: Long) = createCommand("HELLO", proto.toString())
+
+fun helloCommand(proto: Long, vararg args: String) = createCommand("HELLO", proto.toString(), *args)
+
 interface HelloResponse {
     val server: String
     val version: String
@@ -47,7 +51,7 @@ interface HelloResponse {
             val server = data["server"] as String
             val version = data["version"] as String
             val proto = data["proto"] as Long
-            val id = data["id"]?.let { it as Long }
+            val id = data["id"] as Long?
             val mode = data["mode"] as String?
             val role = data["role"] as String?
 
