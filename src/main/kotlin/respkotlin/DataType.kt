@@ -4,36 +4,135 @@ import java.math.BigInteger
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 
+/**
+ * The terminator used in RESP protocol.
+ */
 const val TERMINATOR = "\r\n"
+
+/**
+ * The first byte of the terminator.
+ */
 const val TERMINATOR_FIRST_BYTE = '\r'.code.toByte()
 
+/**
+ * This trait represents a feature that can serialize data to a byte array.
+ *
+ * @param S the type of the data to serialize
+ */
 fun interface Serializer<in S> {
     fun serialize(data: S): ByteArray
 }
 
+/**
+ * This trait represents a feature that can deserialize data from a byte array.
+ *
+ * @param D the type of the data to deserialize
+ */
 fun interface Deserializer<out D> {
     fun deserialize(data: ByteArray): D
 }
 
+/**
+ * It represents a category of data according to the `RESP`.
+ * One of the following: Simple, Bulk or Aggregate.
+ *
+ * Simple and Bulk data types are used to represent a literal value.
+ * Aggregate data types are used to represent a container type, such as List, Set or Dictionary.
+ *
+ * [length] has different meanings according to the data type:
+ * - Simple type, it calculates the length until the terminator including a type identifier. For example, the following
+ * data has a length of 3:
+ * ```shell
+ * +OK\r\n
+ * ```
+ *
+ * - Bulk type, it returns the fixed length of the data. For example, the following data has a length of 5:
+ * ```shell
+ * $5\r\nhello\r\n
+ * ```
+ *
+ * - Aggregate type, it returns the number of elements the data holds. For example, the following data has a length of 2:
+ * ```shell
+ * *2\r\n+foo\r\n+bar\r\n
+ * ```
+ */
 sealed interface DataCategory {
-    val firstByte: Char
     val length: (ByteArray) -> Int
 }
 
-sealed interface DataType<S, D> : Serializer<S>, Deserializer<D>, DataCategory
+/**
+ * It represents a data type that is corresponding to the `RESP`.
+ *
+ * All data types in `RESP` have [firstByte] that identifies the type of the data.
+ * This is literally the first byte of the serialized data.
+ *
+ * For example, you can tell the following data is a Simple String type because the first byte is `+`:
+ * ```shell
+ * +OK\r\n
+ * ```
+ *
+ * @param S the type of the data to serialize
+ * @param D the type of the data to deserialize
+ */
+sealed interface DataType<S, D> : Serializer<S>, Deserializer<D>, DataCategory {
+    val firstByte: Char
+}
 
+/**
+ * It represents a simple data type in `RESP`.
+ *
+ * @param S the type of the data to serialize
+ * @param D the type of the data to deserialize
+ * @see SimpleStringType
+ * @see SimpleErrorType
+ * @see IntegerType
+ * @see NullType
+ * @see BooleanType
+ * @see DoubleType
+ * @see BigNumberType
+ */
 interface SimpleType<S, D> : DataType<S, D> {
     override val length: (ByteArray) -> Int
         get() = { it.lengthUntilTerminator() }
 }
 
-interface AggregateType<S, D> : DataType<S, D> {
+/**
+ * It represents a bulk data type in `RESP`.
+ *
+ * @param S the type of the data to serialize
+ * @param D the type of the data to deserialize
+ * @see BulkStringType
+ * @see BulkErrorType
+ * @see VerbatimStringType
+ */
+interface BulkType<S, D> : DataType<S, D> {
     override val length: (ByteArray) -> Int
         get() = { it.length() }
 }
 
-sealed interface ContainerType<S, D> : AggregateType<S, D>
+/**
+ * It represents an aggregate data type in `RESP`.
+ *
+ * @param S the type of the data to serialize
+ * @param D the type of the data to deserialize
+ * @see ArrayType
+ * @see MapType
+ * @see SetType
+ * @see PushType
+ */
+sealed interface AggregateType<S, D> : DataType<S, D> {
+    override val length: (ByteArray) -> Int
+        get() = { it.length() }
+}
 
+/**
+ * It is a marker interface for error types.
+ * In `RESP`, there are two types of error: Simple Error and Bulk Error.
+ *
+ * @see Error
+ * @see SimpleErrorType
+ * @see BulkErrorType
+ */
 sealed interface ErrorType : Deserializer<Error>
 
 sealed interface Error {
@@ -88,7 +187,7 @@ object IntegerType : SimpleType<Long, Long> {
     override val firstByte get() = ':'
 }
 
-object BulkStringType : AggregateType<String, String> {
+object BulkStringType : BulkType<String, String> {
     override fun serialize(data: String) = "$firstByte${data.length}$TERMINATOR$data$TERMINATOR".toByteArray()
 
     override fun deserialize(data: ByteArray) =
@@ -97,7 +196,7 @@ object BulkStringType : AggregateType<String, String> {
     override val firstByte get() = '$'
 }
 
-object ArrayType : ContainerType<List<Any>, List<Any>> {
+object ArrayType : AggregateType<List<Any>, List<Any>> {
     override fun serialize(data: List<Any>) = serializeContainer(data)
     override fun deserialize(data: ByteArray) = deserializeArray(data, mutableListOf()).first.toList()
     override val firstByte get() = '*'
@@ -139,7 +238,7 @@ object BigNumberType : SimpleType<BigInteger, BigInteger> {
     override val firstByte get() = '('
 }
 
-object BulkErrorType : AggregateType<BulkError, Error>, ErrorType {
+object BulkErrorType : BulkType<BulkError, Error>, ErrorType {
     override fun serialize(data: BulkError) =
         "${data.prefix} ${data.message}".let { "$firstByte${it.length}$TERMINATOR$it$TERMINATOR".toByteArray() }
 
@@ -151,7 +250,7 @@ object BulkErrorType : AggregateType<BulkError, Error>, ErrorType {
     override val firstByte get() = '!'
 }
 
-object VerbatimStringType : AggregateType<VerbatimString, VerbatimString> {
+object VerbatimStringType : BulkType<VerbatimString, VerbatimString> {
     override fun serialize(data: VerbatimString) = "${data.encoding}:${data.data}".let {
         "$firstByte${it.length}$TERMINATOR$it$TERMINATOR".toByteArray()
     }
@@ -164,19 +263,19 @@ object VerbatimStringType : AggregateType<VerbatimString, VerbatimString> {
     override val firstByte get() = '='
 }
 
-object MapType : ContainerType<Map<*, *>, Map<Any, Any>> {
+object MapType : AggregateType<Map<*, *>, Map<Any, Any>> {
     override fun serialize(data: Map<*, *>) = serializeContainer(data)
     override fun deserialize(data: ByteArray) = deserializeMap(data).first
     override val firstByte get() = '%'
 }
 
-object SetType : ContainerType<Set<Any>, Set<Any>> {
+object SetType : AggregateType<Set<Any>, Set<Any>> {
     override fun serialize(data: Set<Any>) = serializeContainer(data)
     override fun deserialize(data: ByteArray) = deserializeArray(data, mutableSetOf()).first.toSet()
     override val firstByte get() = '~'
 }
 
-object PushType : ContainerType<List<Any>, List<Any>> {
+object PushType : AggregateType<List<Any>, List<Any>> {
     override fun serialize(data: List<Any>) = when (data.isEmpty()) {
         true -> "${firstByte}0$TERMINATOR".toByteArray()
         false -> {
@@ -295,19 +394,18 @@ private fun deserializeElement(data: ByteArray) = when (val dataType = data.toDa
         dataType.deserialize(data.sliceArray(0..<len)) to len
     }
 
-    is AggregateType -> when (dataType) {
-        is ContainerType -> when (dataType) {
-            is ArrayType -> deserializeArray(data, mutableListOf())
-            is MapType -> deserializeMap(data)
-            is SetType -> deserializeArray(data, mutableSetOf())
-            is PushType -> deserializeArray(data, mutableListOf())
-        }
-
-        else -> {
-            val len = data.lengthUntilTerminator() + dataType.length(data) + TERMINATOR.length * 2
-            dataType.deserialize(data.sliceArray(0..<len)) to len
-        }
+    is BulkType -> {
+        val len = data.lengthUntilTerminator() + dataType.length(data) + TERMINATOR.length * 2
+        dataType.deserialize(data.sliceArray(0..<len)) to len
     }
+
+    is AggregateType -> when (dataType) {
+        is ArrayType -> deserializeArray(data, mutableListOf())
+        is MapType -> deserializeMap(data)
+        is SetType -> deserializeArray(data, mutableSetOf())
+        is PushType -> deserializeArray(data, mutableListOf())
+    }
+
 }
 
 internal val dataTypeMap = ConcurrentHashMap(
@@ -329,7 +427,7 @@ internal val dataTypeMap = ConcurrentHashMap(
     )
 )
 
-internal fun ByteArray.toDataType(): DataType<out Any, out Any> {
+fun ByteArray.toDataType(): DataType<out Any, out Any> {
     val firstByte = this[0].toInt()
     val dataType = dataTypeMap[firstByte] ?: throw IllegalArgumentException("Unknown data type: $firstByte")
 
@@ -351,7 +449,7 @@ private fun findCustomDataType(serType: KClass<out Any>): DataType<Any, out Any>
     return customDataTypeMap[serType]
 }
 
-fun ByteArray.lengthUntilTerminator() = this.indexOf(TERMINATOR_FIRST_BYTE)
+internal fun ByteArray.lengthUntilTerminator() = this.indexOf(TERMINATOR_FIRST_BYTE)
 
 private fun ByteArray.length(): Int {
     var len = 0

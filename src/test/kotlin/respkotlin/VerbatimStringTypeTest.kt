@@ -31,7 +31,6 @@ class VerbatimStringTypeTest {
         val data = VerbatimString("txt", "Some String")
         // when
         val result = VerbatimStringType.serialize(data)
-        println(String(result))
         // then
         assert(result.contentEquals("=15\r\ntxt:Some String\r\n".toByteArray()))
 

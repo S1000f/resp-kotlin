@@ -78,12 +78,10 @@ fun readResponse(input: InputStream, bufferSize: Int = 1024): ByteArray {
         return buffer.copyOf(read)
     }
 
-    return when (val dataType = buffer.toDataType()) {
+    return when (buffer.toDataType()) {
         is SimpleType -> readSimpleType(input, buffer)
-        is AggregateType -> when (dataType) {
-            is ContainerType -> readContainerType(input, buffer)
-            else -> readAggregateType(input, buffer)
-        }
+        is BulkType -> readBulkType(input, buffer)
+        is AggregateType -> readAggregateType(input, buffer)
     }
 }
 
@@ -97,7 +95,7 @@ private fun readSimpleType(input: InputStream, preRead: ByteArray): ByteArray {
     }
 }
 
-private fun readAggregateType(input: InputStream, preRead: ByteArray): ByteArray {
+private fun readBulkType(input: InputStream, preRead: ByteArray): ByteArray {
     val normalized = readUntilTerminator(input, preRead)
     val length = normalized.toDataType().length(normalized) + TERMINATOR.length
     val prefix = normalized.lengthUntilTerminator() + TERMINATOR.length
@@ -108,7 +106,7 @@ private fun readAggregateType(input: InputStream, preRead: ByteArray): ByteArray
     }
 }
 
-private fun readContainerType(input: InputStream, preRead: ByteArray): ByteArray {
+private fun readAggregateType(input: InputStream, preRead: ByteArray): ByteArray {
     val normalized = readUntilTerminator(input, preRead)
 
     val size = when (val dataType = normalized.toDataType()) {
@@ -128,12 +126,10 @@ private fun readContainerType(input: InputStream, preRead: ByteArray): ByteArray
     }
 
     while (size > countRead) {
-        val bytes = when (val dataType = round.toDataType()) {
+        val bytes = when (round.toDataType()) {
             is SimpleType -> readSimpleType(input, round)
-            is AggregateType -> when (dataType) {
-                is ContainerType -> readContainerType(input, round)
-                else -> readAggregateType(input, round)
-            }
+            is BulkType -> readBulkType(input, round)
+            is AggregateType -> readAggregateType(input, round)
         }
 
         countRead++
