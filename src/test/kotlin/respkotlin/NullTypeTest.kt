@@ -19,8 +19,9 @@ class NullTypeTest {
 
     @Test
     fun `test null serializer`() {
+        val data = null
         // when
-        val result = NullType.serialize(null)
+        val result = NullType.serialize(data)
         // then
         assert(result.contentEquals("_\r\n".toByteArray()))
     }

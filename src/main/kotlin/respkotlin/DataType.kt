@@ -350,8 +350,8 @@ object ArrayType : AggregateType<List<Any?>, List<Any?>> {
  * assertNull(result)
  * ```
  */
-object NullType : SimpleType<Any?, Any?> {
-    override fun serialize(data: Any?) = "$firstByte$TERMINATOR".toByteArray()
+object NullType : SimpleType<Nothing?, Nothing?> {
+    override fun serialize(data: Nothing?) = "$firstByte$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = null
     override val firstByte get() = '_'
 }
@@ -638,13 +638,10 @@ private fun deserializeMap(data: ByteArray): Pair<Map<Any, Any?>, Int> {
         count++
 
         val (key, keyLen) = deserializeElement(round)
-
-        if (key == null) continue
-
         round = round.sliceArray(keyLen..<round.size)
         val (value, valueLen) = deserializeElement(round)
 
-        map[key] = value
+        if (key != null) map[key] = value
         totalLength += (keyLen + valueLen)
 
         if (count == numOfElements) {
