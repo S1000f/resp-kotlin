@@ -2,6 +2,7 @@ package respkotlin
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
+import kotlin.test.assertNull
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class NullTypeTest {
@@ -13,15 +14,13 @@ class NullTypeTest {
         // when
         val result = NullType.deserialize(data)
         // then
-        assert(result == Unit)
+        assertNull(result)
     }
 
     @Test
     fun `test null serializer`() {
-        // given
-        val data = Unit
         // when
-        val result = NullType.serialize(data)
+        val result = NullType.serialize(null)
         // then
         assert(result.contentEquals("_\r\n".toByteArray()))
     }

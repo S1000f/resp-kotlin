@@ -37,9 +37,9 @@ interface HelloResponse {
         override val role: String?,
         override val modules: List<String>?
     ) : HelloResponse {
-        private val attributes = mutableMapOf<String, Any>()
+        private val attributes = mutableMapOf<String, Any?>()
 
-        fun addAttribute(key: String, value: Any) {
+        fun addAttribute(key: String, value: Any?) {
             attributes[key] = value
         }
 
@@ -47,7 +47,7 @@ interface HelloResponse {
     }
 
     companion object {
-        fun create(data: Map<Any, Any>): HelloResponse {
+        fun create(data: Map<Any, Any?>): HelloResponse {
             val server = data["server"] as String
             val version = data["version"] as String
             val proto = data["proto"] as Long

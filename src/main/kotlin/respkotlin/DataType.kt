@@ -20,6 +20,11 @@ const val TERMINATOR_FIRST_BYTE = '\r'.code.toByte()
  * @param S the type of the data to serialize
  */
 fun interface Serializer<in S> {
+    /**
+     * Serializes the data to a byte array.
+     *
+     * @param data the data to serialize
+     */
     fun serialize(data: S): ByteArray
 }
 
@@ -29,6 +34,11 @@ fun interface Serializer<in S> {
  * @param D the type of the data to deserialize
  */
 fun interface Deserializer<out D> {
+    /**
+     * Deserializes the data from a byte array.
+     *
+     * @param data the byte array to deserialize
+     */
     fun deserialize(data: ByteArray): D
 }
 
@@ -48,7 +58,7 @@ fun interface Deserializer<out D> {
  *
  * - Bulk type, it returns the fixed length of the data. For example, the following data has a length of 5:
  * ```shell
- * $5\r\nhello\r\n
+ * $5\r\nHello\r\n
  * ```
  *
  * - Aggregate type, it returns the number of elements the data holds. For example, the following data has a length of 2:
@@ -57,6 +67,13 @@ fun interface Deserializer<out D> {
  * ```
  */
 sealed interface DataCategory {
+    /**
+     * Calculates the length of the serialized data.
+     *
+     * For Simple and Bulk types, the length is the number of bytes of the actual data.
+     *
+     * On the other hand, for Aggregate types, the length is the number of elements the data contains.
+     */
     val length: (ByteArray) -> Int
 }
 
@@ -73,8 +90,15 @@ sealed interface DataCategory {
  *
  * @param S the type of the data to serialize
  * @param D the type of the data to deserialize
+ * @see SimpleType
+ * @see BulkType
+ * @see AggregateType
  */
 sealed interface DataType<S, D> : Serializer<S>, Deserializer<D>, DataCategory {
+    /**
+     * The first byte of the serialized data.
+     * It is used to identify the type of the data uniquely.
+     */
     val firstByte: Char
 }
 
@@ -130,16 +154,40 @@ sealed interface AggregateType<S, D> : DataType<S, D> {
  * In `RESP`, there are two types of error: Simple Error and Bulk Error.
  *
  * @see Error
- * @see SimpleErrorType
- * @see BulkErrorType
  */
 sealed interface ErrorType : Deserializer<Error>
 
+/**
+ * It represents an error in `RESP`.
+ *
+ * Error has a [prefix] and a [message]. [prefix] is a short string that describes the error usually in uppercase.
+ * [message] is a detailed description of the error.
+ *
+ * Note that the contents of [prefix] is not a part of `RESP` protocol. It is defined on the server-side.
+ *
+ * @see SimpleError
+ * @see BulkError
+ */
 sealed interface Error {
+    /**
+     * Error prefix.
+     */
     val prefix: String
+
+    /**
+     * Error message.
+     */
     val message: String
 }
 
+/**
+ * This data class represents a simple error in `RESP`.
+ *
+ * This type of error is used to represent an error that can be described in a single line.
+ *
+ * @throws IllegalArgumentException if the message contains '\r' or '\n'
+ * @see SimpleErrorType
+ */
 data class SimpleError(
     override val prefix: String,
     override val message: String
@@ -151,13 +199,35 @@ data class SimpleError(
     }
 }
 
+/**
+ * This data class represents a bulk error in `RESP`.
+ *
+ * This type of error is used to represent an error that can be described in multiple lines.
+ *
+ * @see BulkErrorType
+ */
 data class BulkError(
     override val prefix: String,
     override val message: String
 ) : Error
 
+/**
+ * This data class represents a verbatim string in `RESP`.
+ *
+ * It has an [encoding] property that is a metadata about the data's encoding.
+ *
+ * @throws IllegalArgumentException if the encoding is not 3 characters long
+ * @see VerbatimStringType
+ */
 data class VerbatimString(
+    /**
+     * The metadata about the data's encoding.
+     * It must be 3 characters long.
+     */
     val encoding: String,
+    /**
+     * The actual data that is encoded.
+     */
     val data: String
 ) {
     init {
@@ -165,12 +235,41 @@ data class VerbatimString(
     }
 }
 
+/**
+ * Simple strings are used to represent a literal value. It never contains '\r' or '\n'.
+ * The first byte of the serialized data is `+`.
+ *
+ * For example:
+ * ```kotlin
+ * val data = "+OK\r\n".toByteArray()
+ * val result = SimpleStringType.deserialize(data)
+ * assert(result == "OK")
+ * ```
+ *
+ * [BulkStringType] is also converted to a [String], but it can contain '\r' or '\n'.
+ * @see BulkStringType
+ *
+ */
 object SimpleStringType : SimpleType<String, String> {
     override fun serialize(data: String) = "$firstByte$data$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1)
     override val firstByte get() = '+'
 }
 
+/**
+ * Simple errors are used to represent an error that can be described in a single line.
+ * The first byte of the serialized data is `-`.
+ *
+ * For example:
+ * ```kotlin
+ * val data = "-ERR Something went wrong\r\n".toByteArray()
+ * val result = SimpleErrorType.deserialize(data)
+ * assert(result.prefix == "ERR")
+ * assert(result.message == "Something went wrong")
+ * ```
+ *
+ * @see BulkErrorType
+ */
 object SimpleErrorType : SimpleType<SimpleError, Error>, ErrorType {
     override fun serialize(data: SimpleError) = "$firstByte${data.prefix} ${data.message}$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = SimpleStringType.deserialize(data).let {
@@ -181,12 +280,37 @@ object SimpleErrorType : SimpleType<SimpleError, Error>, ErrorType {
     override val firstByte get() = '-'
 }
 
+/**
+ * Integers are used to represent a 64-bit signed integer.
+ * The first byte of the serialized data is `:`.
+ *
+ * For example:
+ * ```kotlin
+ * val data = ":42\r\n".toByteArray()
+ * val result = IntegerType.deserialize(data)
+ * assert(result == 42L)
+ * ```
+ *
+ * @see BigNumberType
+ */
 object IntegerType : SimpleType<Long, Long> {
     override fun serialize(data: Long) = "$firstByte${data}$TERMINATOR".toByteArray()
     override fun deserialize(data: ByteArray) = String(data, 1, length(data) - 1).toLong()
     override val firstByte get() = ':'
 }
 
+/**
+ * Bulk strings are used to represent a binary safe string.
+ * The first byte of the serialized data is `$`.
+ * It can contain '\r' or '\n'.
+ *
+ * For example:
+ * ```kotlin
+ * val data = "$5\r\nHello\r\n".toByteArray()
+ * val result = BulkStringType.deserialize(data)
+ * assert(result == "Hello")
+ * ```
+ */
 object BulkStringType : BulkType<String, String> {
     override fun serialize(data: String) = "$firstByte${data.length}$TERMINATOR$data$TERMINATOR".toByteArray()
 
@@ -196,15 +320,39 @@ object BulkStringType : BulkType<String, String> {
     override val firstByte get() = '$'
 }
 
-object ArrayType : AggregateType<List<Any>, List<Any>> {
+/**
+ * Arrays are used to represent a list of `RESP` values.
+ * The first byte of the serialized data is `*`.
+ *
+ * For example:
+ * ```kotlin
+ * val data = "*2\r\n+foo\r\n+bar\r\n".toByteArray()
+ * val result = ArrayType.deserialize(data)
+ * assert(result == listOf("foo", "bar"))
+ * ```
+ *
+ * @see SetType
+ */
+object ArrayType : AggregateType<List<Any>, List<Any?>> {
     override fun serialize(data: List<Any>) = serializeContainer(data)
     override fun deserialize(data: ByteArray) = deserializeArray(data, mutableListOf()).first.toList()
     override val firstByte get() = '*'
 }
 
-object NullType : SimpleType<Unit, Unit> {
-    override fun serialize(data: Unit) = "$firstByte$TERMINATOR".toByteArray()
-    override fun deserialize(data: ByteArray) = Unit
+/**
+ * Null type is used to represent a null value.
+ * The first byte of the serialized data is `_`.
+ *
+ * For example:
+ * ```kotlin
+ * val data = "_\r\n".toByteArray()
+ * val result = NullType.deserialize(data)
+ * assertNull(result)
+ * ```
+ */
+object NullType : SimpleType<Any?, Any?> {
+    override fun serialize(data: Any?) = "$firstByte$TERMINATOR".toByteArray()
+    override fun deserialize(data: ByteArray) = null
     override val firstByte get() = '_'
 }
 
@@ -263,19 +411,19 @@ object VerbatimStringType : BulkType<VerbatimString, VerbatimString> {
     override val firstByte get() = '='
 }
 
-object MapType : AggregateType<Map<*, *>, Map<Any, Any>> {
+object MapType : AggregateType<Map<*, *>, Map<Any, Any?>> {
     override fun serialize(data: Map<*, *>) = serializeContainer(data)
     override fun deserialize(data: ByteArray) = deserializeMap(data).first
     override val firstByte get() = '%'
 }
 
-object SetType : AggregateType<Set<Any>, Set<Any>> {
+object SetType : AggregateType<Set<Any>, Set<Any?>> {
     override fun serialize(data: Set<Any>) = serializeContainer(data)
     override fun deserialize(data: ByteArray) = deserializeArray(data, mutableSetOf()).first.toSet()
     override val firstByte get() = '~'
 }
 
-object PushType : AggregateType<List<Any>, List<Any>> {
+object PushType : AggregateType<List<Any>, List<Any?>> {
     override fun serialize(data: List<Any>) = when (data.isEmpty()) {
         true -> "${firstByte}0$TERMINATOR".toByteArray()
         false -> {
@@ -288,7 +436,7 @@ object PushType : AggregateType<List<Any>, List<Any>> {
     override val firstByte get() = '>'
 }
 
-private fun serializeContainer(data: Any): ByteArray = when (data) {
+private fun serializeContainer(data: Any?): ByteArray = when (data) {
     is String -> when (data.contains('\r') || data.contains('\n')) {
         true -> BulkStringType.serialize(data)
         false -> SimpleStringType.serialize(data)
@@ -300,7 +448,7 @@ private fun serializeContainer(data: Any): ByteArray = when (data) {
     is List<*> -> when (data.isEmpty()) {
         true -> "${ArrayType.firstByte}0$TERMINATOR".toByteArray()
         false -> {
-            val collect = data.map { serializeContainer(it!!) }
+            val collect = data.map { serializeContainer(it) }
             collect.fold("${ArrayType.firstByte}${collect.size}$TERMINATOR".toByteArray(), ByteArray::plus)
         }
     }
@@ -314,7 +462,7 @@ private fun serializeContainer(data: Any): ByteArray = when (data) {
     is Map<*, *> -> when (data.isEmpty()) {
         true -> "${MapType.firstByte}0$TERMINATOR".toByteArray()
         false -> {
-            val collect = data.map { (k, v) -> serializeContainer(k!!) + serializeContainer(v!!) }
+            val collect = data.map { (k, v) -> serializeContainer(k) + serializeContainer(v) }
             collect.fold("${MapType.firstByte}${collect.size}$TERMINATOR".toByteArray(), ByteArray::plus)
         }
     }
@@ -322,18 +470,21 @@ private fun serializeContainer(data: Any): ByteArray = when (data) {
     is Set<*> -> when (data.isEmpty()) {
         true -> "${SetType.firstByte}0$TERMINATOR".toByteArray()
         false -> {
-            val collect = data.map { serializeContainer(it!!) }
+            val collect = data.map { serializeContainer(it) }
             collect.fold("${SetType.firstByte}${collect.size}$TERMINATOR".toByteArray(), ByteArray::plus)
         }
     }
 
-    else -> {
-        val dataType = findCustomDataType(data::class) ?: throw IllegalArgumentException("Unknown data type: $data")
-        dataType.serialize(data)
+    else -> when (data) {
+        null -> NullType.serialize(null)
+        else -> {
+            val dataType = findCustomDataType(data::class) ?: throw IllegalArgumentException("Unknown data type: $data")
+            dataType.serialize(data)
+        }
     }
 }
 
-private fun <T : MutableCollection<Any>> deserializeArray(data: ByteArray, container: T): Pair<T, Int> {
+private fun <T : MutableCollection<Any?>> deserializeArray(data: ByteArray, container: T): Pair<T, Int> {
     val numOfElements = data.length()
     val prefix = data.lengthUntilTerminator() + TERMINATOR.length
 
@@ -359,9 +510,9 @@ private fun <T : MutableCollection<Any>> deserializeArray(data: ByteArray, conta
     return container to totalLength
 }
 
-private fun deserializeMap(data: ByteArray): Pair<Map<Any, Any>, Int> {
+private fun deserializeMap(data: ByteArray): Pair<Map<Any, Any?>, Int> {
     val numOfElements = data.length()
-    val map = mutableMapOf<Any, Any>()
+    val map = mutableMapOf<Any, Any?>()
     val prefix = data.lengthUntilTerminator() + TERMINATOR.length
 
     var round = data.sliceArray(prefix..<data.size)
@@ -372,6 +523,9 @@ private fun deserializeMap(data: ByteArray): Pair<Map<Any, Any>, Int> {
         count++
 
         val (key, keyLen) = deserializeElement(round)
+
+        if (key == null) continue
+
         round = round.sliceArray(keyLen..<round.size)
         val (value, valueLen) = deserializeElement(round)
 
@@ -400,12 +554,10 @@ private fun deserializeElement(data: ByteArray) = when (val dataType = data.toDa
     }
 
     is AggregateType -> when (dataType) {
-        is ArrayType -> deserializeArray(data, mutableListOf())
+        is ArrayType, PushType -> deserializeArray(data, mutableListOf())
         is MapType -> deserializeMap(data)
         is SetType -> deserializeArray(data, mutableSetOf())
-        is PushType -> deserializeArray(data, mutableListOf())
     }
-
 }
 
 internal val dataTypeMap = ConcurrentHashMap(
@@ -427,7 +579,7 @@ internal val dataTypeMap = ConcurrentHashMap(
     )
 )
 
-fun ByteArray.toDataType(): DataType<out Any, out Any> {
+fun ByteArray.toDataType(): DataType<out Any?, out Any?> {
     val firstByte = this[0].toInt()
     val dataType = dataTypeMap[firstByte] ?: throw IllegalArgumentException("Unknown data type: $firstByte")
 
