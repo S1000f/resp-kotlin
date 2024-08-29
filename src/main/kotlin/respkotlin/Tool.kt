@@ -3,29 +3,94 @@ package respkotlin
 import java.io.InputStream
 import kotlin.reflect.KClass
 
+/**
+ * Register a custom data type for serialization and deserialization.
+ *
+ * Once registered, the custom data type can be used in the container types of the `RESP` protocol,
+ * such as [ArrayType], [SetType] or [MapType].
+ *
+ * You can use [SimpleType] or [BulkType] to implement your custom [DataType].
+ *
+ * @param kClass The class of the custom data type.
+ * @param dataType The custom data type to register.
+ */
 fun <S : Any, D : Any> registerDataType(kClass: KClass<S>, dataType: DataType<S, D>) =
     putCustomDataType(kClass, dataType)
 
+/**
+ * Create a command from a list of strings.
+ *
+ * The byte array returned is in the form of an array of bulk strings.
+ */
 fun createCommand(command: List<String>) =
     command.map { BulkStringType.serialize(it) }
         .fold("*${command.size}\r\n".toByteArray(), ByteArray::plus)
 
+/**
+ * Create a command from a list of strings.
+ *
+ * The byte array returned is in the form of an array of bulk strings.
+ */
 fun createCommand(vararg command: String) = createCommand(command.toList())
 
+/**
+ * Create a command from a list of strings.
+ *
+ * The byte array returned is in the form of an array of bulk strings.
+ */
 fun List<String>.toCommand() = createCommand(this)
 
+/**
+ * Create the `HELLO` command.
+ *
+ * In order to use `RESP3`, the client must first send a `HELLO` command to the server.
+ */
 fun helloCommand(proto: Long) = createCommand("HELLO", proto.toString())
 
+/**
+ * Create the `HELLO` command.
+ *
+ * In order to use `RESP3`, the client must first send a `HELLO` command to the server.
+ */
 fun helloCommand(proto: Long, vararg args: String) = createCommand("HELLO", proto.toString(), *args)
 
+/**
+ * It represents the response of the `HELLO` command.
+ *
+ * [server], [version] and [proto] are mandatory fields.
+ */
 interface HelloResponse {
+    /**
+     * The server name.
+     */
     val server: String
+    /**
+     * The server version.
+     */
     val version: String
+    /**
+     * The protocol version.
+     */
     val proto: Long
+    /**
+     * The connection's ID(client ID).
+     */
     val id: Long?
+    /**
+     * The connection's mode.
+     */
     val mode: String?
+    /**
+     * The connection's role.
+     */
     val role: String?
+    /**
+     * The list of loaded modules.
+     */
     val modules: List<String>?
+    /**
+     * Get an attribute by key.
+     */
     fun getAttribute(key: String): Any?
 
     private data class HelloResponseDefault(
@@ -47,6 +112,9 @@ interface HelloResponse {
     }
 
     companion object {
+        /**
+         * Create a [HelloResponse] from a map.
+         */
         fun create(data: Map<Any, Any?>): HelloResponse {
             val server = data["server"] as String
             val version = data["version"] as String
@@ -64,10 +132,18 @@ interface HelloResponse {
             return response
         }
 
+        /**
+         * Create a [HelloResponse] from a byte array.
+         */
         fun create(data: ByteArray) = create(MapType.deserialize(data))
     }
 }
 
+/**
+ * Read all the `RESP` data from the input stream.
+ *
+ * The function reads all bytes that consist of a one valid `RESP` data type.
+ */
 fun readResponse(input: InputStream, bufferSize: Int = 1024): ByteArray {
     require(bufferSize > 0) { "Buffer size must be greater than 0" }
 

@@ -75,11 +75,11 @@ class MapTypeTest {
     @Test
     fun `test map serializer`() {
         // given
-        val data = mapOf("first" to 1L, "second" to 2L)
+        val data = mapOf("first" to 1L, "second" to null)
         // when
         val result = MapType.serialize(data)
         // then
-        assert(result.contentEquals("%2\r\n+first\r\n:1\r\n+second\r\n:2\r\n".toByteArray()))
+        assert(result.contentEquals("%2\r\n+first\r\n:1\r\n+second\r\n_\r\n".toByteArray()))
 
         // given
         val data1 = mapOf("first" to "hello\nworld!", "second" to 2L)
