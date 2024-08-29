@@ -79,14 +79,14 @@ class MapTypeTest {
         // when
         val result = MapType.serialize(data)
         // then
-        assert(result.contentEquals("%2\r\n+first\r\n:1\r\n+second\r\n_\r\n".toByteArray()))
+        assert(result.contentEquals("%2\r\n$5\r\nfirst\r\n:1\r\n$6\r\nsecond\r\n_\r\n".toByteArray()))
 
         // given
-        val data1 = mapOf("first" to "hello\nworld!", "second" to 2L)
+        val data1 = mapOf("f" to "hello\nworld!", "s" to 2L)
         // when
         val result1 = MapType.serialize(data1)
         // then
-        assert(result1.contentEquals("%2\r\n+first\r\n$12\r\nhello\nworld!\r\n+second\r\n:2\r\n".toByteArray()))
+        assert(result1.contentEquals("%2\r\n$1\r\nf\r\n$12\r\nhello\nworld!\r\n$1\r\ns\r\n:2\r\n".toByteArray()))
 
         // given
         val data2 = emptyMap<Any, Any>()
@@ -96,24 +96,24 @@ class MapTypeTest {
         assert(result2.contentEquals("%0\r\n".toByteArray()))
 
         // given
-        val data3 = mapOf("first" to listOf("foo", 2L), "second" to "bar")
+        val data3 = mapOf("k" to listOf("foo", 2L), "k2" to "bar")
         // when
         val result3 = MapType.serialize(data3)
         // then
-        assert(result3.contentEquals("%2\r\n+first\r\n*2\r\n+foo\r\n:2\r\n+second\r\n+bar\r\n".toByteArray()))
+        assert(result3.contentEquals("%2\r\n$1\r\nk\r\n*2\r\n$3\r\nfoo\r\n:2\r\n$2\r\nk2\r\n$3\r\nbar\r\n".toByteArray()))
 
         // given
         val data4 = mapOf(listOf("foo") to "bar", "second" to 2L)
         // when
         val result4 = MapType.serialize(data4)
         // then
-        assert(result4.contentEquals("%2\r\n*1\r\n+foo\r\n+bar\r\n+second\r\n:2\r\n".toByteArray()))
+        assert(result4.contentEquals("%2\r\n*1\r\n$3\r\nfoo\r\n$3\r\nbar\r\n$6\r\nsecond\r\n:2\r\n".toByteArray()))
 
         // given
-        val data5 = mapOf(mapOf("k" to 1L, "bar" to "val") to 42L, "foo" to listOf("bar", 42L))
+        val data5 = mapOf(mapOf("k" to 1L, "b" to "v") to 42L, "foo" to listOf("bar", 42L))
         // when
         val result5 = MapType.serialize(data5)
         // then
-        assert(result5.contentEquals("%2\r\n%2\r\n+k\r\n:1\r\n+bar\r\n+val\r\n:42\r\n+foo\r\n*2\r\n+bar\r\n:42\r\n".toByteArray()))
+        assert(result5.contentEquals("%2\r\n%2\r\n$1\r\nk\r\n:1\r\n$1\r\nb\r\n$1\r\nv\r\n:42\r\n$3\r\nfoo\r\n*2\r\n$3\r\nbar\r\n:42\r\n".toByteArray()))
     }
 }

@@ -18,6 +18,15 @@ fun <S : Any, D : Any> registerDataType(kClass: KClass<S>, dataType: DataType<S,
     putCustomDataType(kClass, dataType)
 
 /**
+ * Configure the aggregate type to use only bulk strings when serializing.
+ *
+ * If set to `true`, the aggregate type will serialize all [String] elements as [BulkStringType].
+ *
+ * By default, it is set to `true`.
+ */
+fun configureUseBulkString(value: Boolean = true) = USE_BULK_STRING.set(value)
+
+/**
  * Create a command from a list of strings.
  *
  * The byte array returned is in the form of an array of bulk strings.

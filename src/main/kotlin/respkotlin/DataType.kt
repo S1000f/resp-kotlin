@@ -2,6 +2,7 @@ package respkotlin
 
 import java.math.BigInteger
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.reflect.KClass
 
 /**
@@ -13,6 +14,8 @@ const val TERMINATOR = "\r\n"
  * The first byte of the terminator.
  */
 const val TERMINATOR_FIRST_BYTE = '\r'.code.toByte()
+
+internal var USE_BULK_STRING = AtomicBoolean(true)
 
 /**
  * This trait represents a feature that can serialize data to a byte array.
@@ -543,9 +546,12 @@ object PushType : AggregateType<List<Any?>, List<Any?>> {
  * @return the serialized data
  */
 private fun serializeContainer(data: Any?): ByteArray = when (data) {
-    is String -> when (data.contains('\r') || data.contains('\n')) {
+    is String -> when (USE_BULK_STRING.get()) {
         true -> BulkStringType.serialize(data)
-        false -> SimpleStringType.serialize(data)
+        false -> when (data.contains('\r') || data.contains('\n')) {
+            true -> BulkStringType.serialize(data)
+            false -> SimpleStringType.serialize(data)
+        }
     }
 
     is SimpleError -> SimpleErrorType.serialize(data)

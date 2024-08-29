@@ -123,7 +123,7 @@ class PushTypeTest {
         // when
         val matched2 = PushType.serialize(list)
         // then
-        assert(matched2.contentEquals(">2\r\n+foo\r\n+bar\r\n".toByteArray()))
+        assert(matched2.contentEquals(">2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n".toByteArray()))
 
         // given
         val list1 = listOf("fo\no", 1000L)
@@ -137,27 +137,27 @@ class PushTypeTest {
         // when
         val matched4 = PushType.serialize(list2)
         // then
-        assert(matched4.contentEquals(">2\r\n+foo\r\n*2\r\n+bar\r\n:1000\r\n".toByteArray()))
+        assert(matched4.contentEquals(">2\r\n$3\r\nfoo\r\n*2\r\n$3\r\nbar\r\n:1000\r\n".toByteArray()))
 
         // given
         val list3 = listOf("hello\nworld", listOf("bar", 1000L), "baz")
         // when
         val matched5 = PushType.serialize(list3)
         // then
-        assert(matched5.contentEquals(">3\r\n$11\r\nhello\nworld\r\n*2\r\n+bar\r\n:1000\r\n+baz\r\n".toByteArray()))
+        assert(matched5.contentEquals(">3\r\n$11\r\nhello\nworld\r\n*2\r\n$3\r\nbar\r\n:1000\r\n$3\r\nbaz\r\n".toByteArray()))
 
         // given
         val list4 = listOf(listOf("foo", 42L), listOf("bar", 1000L))
         // when
         val matched6 = PushType.serialize(list4)
         // then
-        assert(matched6.contentEquals(">2\r\n*2\r\n+foo\r\n:42\r\n*2\r\n+bar\r\n:1000\r\n".toByteArray()))
+        assert(matched6.contentEquals(">2\r\n*2\r\n$3\r\nfoo\r\n:42\r\n*2\r\n$3\r\nbar\r\n:1000\r\n".toByteArray()))
 
         // given
         val list5 = listOf(listOf("foo", listOf("bar", 42L)), "hello\nworld")
         // when
         val matched7 = PushType.serialize(list5)
         // then
-        assert(matched7.contentEquals(">2\r\n*2\r\n+foo\r\n*2\r\n+bar\r\n:42\r\n$11\r\nhello\nworld\r\n".toByteArray()))
+        assert(matched7.contentEquals(">2\r\n*2\r\n$3\r\nfoo\r\n*2\r\n$3\r\nbar\r\n:42\r\n$11\r\nhello\nworld\r\n".toByteArray()))
     }
 }

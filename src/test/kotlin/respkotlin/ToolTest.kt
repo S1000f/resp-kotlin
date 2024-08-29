@@ -325,6 +325,23 @@ class ToolTest {
         // then
         assert(helloCommand1.contentEquals("*4\r\n$5\r\nHELLO\r\n$1\r\n3\r\n$3\r\nkey\r\n$5\r\nvalue\r\n".toByteArray()))
     }
+
+    @Test
+    fun `test configureUseOnlyBulkString`() {
+        // given
+        val list = listOf("Hello", "World")
+        // when
+        configureUseBulkString()
+        val serialize = ArrayType.serialize(list)
+        // then
+        assert(serialize.contentEquals("*2\r\n$5\r\nHello\r\n$5\r\nWorld\r\n".toByteArray()))
+
+        // when
+        configureUseBulkString(false)
+        val serialize1 = ArrayType.serialize(list)
+        // then
+        assert(serialize1.contentEquals("*2\r\n+Hello\r\n+World\r\n".toByteArray()))
+    }
 }
 
 object LocalDateTimeType : SimpleType<LocalDateTime, LocalDateTime> {
