@@ -711,6 +711,8 @@ internal val dataTypeMap = ConcurrentHashMap(
  * @throws IllegalArgumentException if the first byte is not a known data type
  */
 fun ByteArray.toDataType(): DataType<out Any?, out Any?> {
+    if (isEmpty()) throw IllegalArgumentException("Empty data")
+
     val firstByte = this[0].toInt()
     val dataType = dataTypeMap[firstByte] ?: throw IllegalArgumentException("Unknown data type: $firstByte")
 
