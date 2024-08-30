@@ -60,22 +60,22 @@ The data types are categorized into three groups: Simple, Bulk and Aggregate.
 
 The following table shows the correspondence between RESP data types and Kotlin types.
 
-| Data Type        | Category  | Corresponding Kotlin Type                   |
-|------------------|-----------|---------------------------------------------|
-| Simple strings   | Simple    | String                                      |
-| Simple errors    | Simple    | *Error (presented by the library)*          |
-| Integers         | Simple    | Long                                        |
-| Bulk strings     | Bulk      | String                                      |
-| Arrays           | Aggregate | List<Any?>                                  |
-| Nulls            | Simple    | null (Nothing?)                             |
-| Booleans         | Simple    | Boolean                                     |
-| Doubles          | Simple    | Double                                      |
-| Big numbers      | Simple    | BigInteger (java.math)                      |
-| Bulk errors      | Bulk      | *Error (presented by the library)*          |
-| Verbatim strings | Bulk      | *VerbatimString (presented by the library)* |
-| Maps             | Aggregate | Map<Any, Any?>                              |
-| Sets             | Aggregate | Set<Any?>                                   |
-| Pushes           | Aggregate | List<Any?>                                  |
+| Data Type        | Category  | Identifier | Corresponding Kotlin Type                   |
+|------------------|-----------|------------|---------------------------------------------|
+| Simple strings   | Simple    | +          | String                                      |
+| Simple errors    | Simple    | -          | *Error (presented by the library)*          |
+| Integers         | Simple    | :          | Long                                        |
+| Bulk strings     | Bulk      | $          | String                                      |
+| Arrays           | Aggregate | *          | List<Any?>                                  |
+| Nulls            | Simple    | _          | null (Nothing?)                             |
+| Booleans         | Simple    | #          | Boolean                                     |
+| Doubles          | Simple    | ,          | Double                                      |
+| Big numbers      | Simple    | (          | BigInteger (java.math)                      |
+| Bulk errors      | Bulk      | !          | *Error (presented by the library)*          |
+| Verbatim strings | Bulk      | =          | *VerbatimString (presented by the library)* |
+| Maps             | Aggregate | %          | Map<Any, Any?>                              |
+| Sets             | Aggregate | ~          | Set<Any?>                                   |
+| Pushes           | Aggregate | \>         | List<Any?>                                  |
 
 
 ### 2.1 Serialization
@@ -119,7 +119,8 @@ inline fun <reified T> exchange(command: ByteArray, deserializer: (ByteArray) ->
 }
 
 fun main() {
-    val exchange: String = exchange(listOf("SET", "key", "value").toCommand(), SimpleStringType::deserialize)
+    val exchange: String = 
+        exchange(listOf("SET", "key", "val").toCommand(), SimpleStringType::deserialize)
 }
 ```
 
@@ -141,4 +142,58 @@ when (dataType) {
 <br/>
 
 ## 3. Tools
+
+### 3.1 Registering Custom Data Types
+
+Besides using RESP as the protocol for communication with *redis-like* servers, you can use it just like a binary-safe
+serialization protocol for your data structures in any use case.
+
+Now, consider you want to serialize a `LocalDateTime` instance (even though you can still serialize it to String manually).
+You can create a custom data type for it.
+
+```kotlin
+object LocalDateTimeType : SimpleType<LocalDateTime, LocalDateTime> {
+    override fun serialize(data: LocalDateTime) = "$firstByte$data$TERMINATOR".toByteArray()
+    override fun deserialize(data: ByteArray) = LocalDateTime.parse(String(data, 1, data.size - 3))
+    override val firstByte: Char get() = 't'
+}
+```
+
+The new data type must be SimpleType or BulkType. And the `firstByte` property must be unique among all data types
+including built-in types.
+
+Once you register the new data type, the library will be able to serialize and deserialize `LocalDateTime` with any
+Aggregate type of RESP.
+
+```kotlin
+registerDataType(LocalDateTime::class, LocalDateTimeType)
+
+val time = LocalDateTime.parse("2024-08-24T21:38:12")
+val serialize = MapType.serialize(mapOf("timestamp" to time))
+assert(serialize.contentEquals("%1\r\n$9\r\ntimestamp\r\nt2024-08-24T21:38:12\r\n".toByteArray()))
+```
+
+### 3.2 configuring USE_BULK_STRING
+
+When this flag is set to true, the library will use only `BulkStringType` for serializing string elements in a container
+such as `List<String>`, `Set<String>` etc.
+
+Otherwise, the library will choose `SimpleStringType`, if the string does not contain `\r` and `\n` characters.
+
+### 3.3 create command
+
+You can create a command for a *redis-like* server using one of the following functions.
+
+```kotlin
+val comm = createCommand(listOf("SET", "key", "value"))
+val comm1 = createCommand("SET", "key", "value")
+val comm2 = listOf("SET", "key", "value").toCommand()
+```
+
+### 3.4 read response
+
+the server may use TCP-KEEPALIVE to keep the connection alive. So, you may need to read the response without receiving the
+end of the stream.
+
+the function `readResponse` reads all bytes from the input stream so that it can make a proper byte array of RESP type.
 

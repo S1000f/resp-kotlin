@@ -345,14 +345,7 @@ class ToolTest {
 }
 
 object LocalDateTimeType : SimpleType<LocalDateTime, LocalDateTime> {
-    override fun serialize(data: LocalDateTime): ByteArray {
-        return "$firstByte$data$TERMINATOR".toByteArray()
-    }
-
-    override fun deserialize(data: ByteArray): LocalDateTime {
-        return LocalDateTime.parse(String(data, 1, data.size - 3))
-    }
-
-    override val firstByte: Char
-        get() = 't'
+    override fun serialize(data: LocalDateTime) = "$firstByte$data$TERMINATOR".toByteArray()
+    override fun deserialize(data: ByteArray) = LocalDateTime.parse(String(data, 1, data.size - 3))
+    override val firstByte: Char get() = 't'
 }
